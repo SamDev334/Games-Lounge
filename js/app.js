@@ -42,7 +42,19 @@
       const stats = h('div', { class: 'small muted', html:
         `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b>` });
 
+      const So = Core.Social;
+      const loginBtn = h('button', { class: 'btn', style: { position: 'relative' }, onclick: () => So && So.openPanel({}) });
+      const updLogin = () => {
+        if (!So || !So.enabled) { loginBtn.style.display = 'none'; return; }
+        loginBtn.style.display = '';
+        if (So.user && So.me) { const n = So.requests.length + So.invites.length; loginBtn.innerHTML = `${So.me.avatar} ${So.me.name}` + (n ? `<span class="badge">${n}</span>` : ''); }
+        else loginBtn.textContent = '👥 Entrar / Amigos';
+      };
+      this.unsub = So ? So.on(updLogin) : null; updLogin();
+      if (So && !So.authReady) setTimeout(updLogin, 1500);
+
       root.append(h('div', { class: 'hub' },
+        h('div', { class: 'row', style: { justifyContent: 'flex-end', minHeight: '38px' } }, loginBtn),
         h('div', { class: 'hub-head' },
           h('div', { class: 'logo' }, 'SALÃO DOS JOGOS'),
           h('p', null, 'Xadrez · Truco · Poker · Gamão — tudo no seu navegador'),
@@ -52,9 +64,9 @@
           h('div', { class: 'panel' }, h('h3', null, 'Jogador'), nameInput),
           h('div', { class: 'panel' }, h('h3', null, 'Som'), h('div', { class: 'row sb' }, h('span', null, 'Efeitos sonoros'), h('label', { class: 'switch' }, sw, h('i')))),
           h('div', { class: 'panel' }, h('h3', null, 'Placar'), stats)),
-        h('div', { class: 'footer' }, 'Sem cadastro, sem servidor · Seu progresso fica salvo apenas no seu aparelho')));
+        h('div', { class: 'footer' }, 'Jogue offline ou entre com Google para jogar online com amigos · Seu progresso fica salvo no seu aparelho')));
     },
-    unmount() { }
+    unmount() { if (this.unsub) { this.unsub(); this.unsub = null; } }
   });
 
   // símbolos flutuantes no fundo
