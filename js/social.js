@@ -254,6 +254,107 @@
     sheet.innerHTML = ''; sheet.append(box);
   }
 
+  // ---------- utilitários compartilhados pelos jogos online ----------
+  S.watchPresence = function (uid, cb) {
+    const ref = S.db.ref('presence/' + uid);
+    const fn = ref.on('value', s => { const v = s.val(); cb(!!(v && v.online)); });
+    return () => ref.off('value', fn);
+  };
+  /** cria sala multi-jogador (Poker/Truco): host + amigos convidados */
+  S.createRoom = async function (game, friends, extra) {
+    const db = S.db, me = S.user.uid;
+    const rid = db.ref('rooms').push().key;
+    const members = {}, players = {};
+    players[me] = { name: S.me.name, avatar: S.me.avatar };
+    friends.forEach(f => { members[f.uid] = true; players[f.uid] = { name: f.name, avatar: f.avatar }; });
+    const room = Object.assign({ game, host: me, hostName: S.me.name, hostAvatar: S.me.avatar, members, players, created: S.TS, status: 'waiting' }, extra || {});
+    await db.ref('rooms/' + rid).set(room);
+    await Promise.all(friends.map(f => S.sendInvite(f.uid, game, rid)));
+    return rid;
+  };
+  /** convidado aceita entrar na sala multi-jogador */
+  S.joinMemberRoom = async function (inv) {
+    const me = S.user.uid;
+    const snap = await S.db.ref('rooms/' + inv.room).get();
+    if (!snap.exists()) throw new Error('Convite expirado');
+    const room = snap.val();
+    if (!(room.members && room.members[me]) && room.guest !== me) throw new Error('Convite inválido');
+    await S.db.ref('rooms/' + inv.room + '/ready/' + me).set(true);
+    return room;
+  };
+
+  /** Lobby embutido na tela inicial de cada jogo.
+      opts: {game, multi, max, createLabel, onCreate(friends[]), resumeKey, onResume()} -> {el, destroy} */
+  S.lobby = function (opts) {
+    const el = h('div', { class: 'panel' });
+    const sel = new Set();
+    const render = () => {
+      el.innerHTML = '';
+      el.append(h('h3', null, '🌐 Jogar online com amigos'));
+      if (!S.enabled) { el.append(h('p', { class: 'muted small' }, 'Modo online indisponível no momento.')); return; }
+      if (!S.authReady) { el.append(h('p', { class: 'muted small' }, 'Conectando…')); return; }
+      if (!S.user || !S.me) {
+        el.append(h('p', { class: 'small muted' }, 'Entre com sua conta Google para convidar amigos e jogar em tempo real.'),
+          h('button', { class: 'btn primary block', onclick: () => S.openPanel({}) }, '🔐 Entrar / Amigos'));
+        return;
+      }
+      el.append(h('div', { class: 'row sb', style: { marginBottom: '8px' } },
+        h('div', { class: 'olrow' }, h('div', { class: 'av' }, S.me.avatar), h('b', null, S.me.name)),
+        h('button', { class: 'btn sm', onclick: () => S.openPanel({}) }, '👥 Amigos' + (S.requests.length ? ` (${S.requests.length})` : ''))));
+      const saved = opts.resumeKey ? Core.store.get(opts.resumeKey, null) : null;
+      if (saved && opts.onResume) el.append(h('div', { class: 'plan', style: { margin: '6px 0 10px' } }, 'Partida online em andamento. ',
+        h('button', { class: 'btn sm primary', onclick: opts.onResume }, '↻ Retomar'), ' ',
+        h('button', { class: 'btn sm ghost', onclick: () => { Core.store.set(opts.resumeKey, null); render(); } }, 'Descartar')));
+      const friends = Array.from(S.friends.values()).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+      if (!friends.length) { el.append(h('p', { class: 'muted small' }, 'Você ainda não tem amigos. Toque em "Amigos" para adicionar com o código.')); return; }
+      const max = opts.max || 1;
+      friends.forEach(f => {
+        const chosen = sel.has(f.uid);
+        el.append(h('div', { class: 'f-row' },
+          h('div', { class: 'av' }, f.avatar), h('span', { class: 'dot-st ' + (f.online ? 'on' : '') }),
+          h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'small muted' }, f.online ? 'online' : 'offline')),
+          opts.multi
+            ? h('button', { class: 'btn sm' + (chosen ? ' good' : '') + (f.online ? '' : ' disabled'), onclick: () => { if (chosen) sel.delete(f.uid); else if (sel.size < max) sel.add(f.uid); else Core.toast('Máximo de ' + max + ' amigos'); render(); } }, chosen ? '✓ Convidado' : '+ Convidar')
+            : h('button', { class: 'btn sm primary' + (f.online ? '' : ' disabled'), onclick: () => opts.onCreate([f]) }, '⚔ Desafiar')));
+      });
+      if (opts.multi) el.append(h('button', { class: 'btn primary block' + (sel.size ? '' : ' disabled'), style: { marginTop: '10px' }, onclick: () => opts.onCreate(Array.from(sel).map(id => S.friends.get(id)).filter(Boolean)) }, opts.createLabel || 'Criar sala'));
+    };
+    const unsub = S.on(render); render();
+    return { el, destroy: unsub };
+  };
+
+  /** Sala de espera (multi-jogador). o: {rid, isHost, minReady, title, onStart(readyUids), onPlaying(room), onLeave()} -> {el, destroy} */
+  S.waitRoom = function (o) {
+    const ref = S.db.ref('rooms/' + o.rid);
+    const el = h('div', { class: 'panel' });
+    let room = null, fired = false;
+    const render = () => {
+      el.innerHTML = '';
+      el.append(h('h3', null, o.title || 'Sala de espera'));
+      if (!room) { el.append(h('p', { class: 'muted' }, 'Carregando…')); return; }
+      const ready = room.ready || {}, uids = Object.keys(room.players || {});
+      const nReady = uids.filter(u => u !== room.host && ready[u]).length;
+      uids.forEach(u => {
+        const p = room.players[u];
+        el.append(h('div', { class: 'f-row' }, h('div', { class: 'av' }, p.avatar || '🙂'),
+          h('div', { class: 'grow' }, h('b', null, p.name), h('div', { class: 'small muted' }, u === room.host ? '👑 anfitrião' : (ready[u] ? '✅ pronto' : '⏳ aguardando aceitar'))),
+          u === S.user.uid ? h('span', { class: 'chip' }, 'você') : null));
+      });
+      el.append(h('div', { class: 'small muted', style: { margin: '8px 0' } }, o.isHost ? 'Quando seus amigos estiverem prontos, inicie. Vagas livres são ocupadas por IAs.' : 'Aguardando o anfitrião iniciar a partida…'));
+      el.append(h('div', { class: 'row' },
+        o.isHost ? h('button', { class: 'btn primary grow' + (nReady >= (o.minReady || 1) ? '' : ' disabled'), onclick: () => o.onStart(uids.filter(u => u !== room.host && ready[u])) }, '▶ Iniciar partida') : null,
+        h('button', { class: 'btn ghost' + (o.isHost ? '' : ' grow'), onclick: () => o.onLeave() }, o.isHost ? 'Cancelar' : 'Sair')));
+    };
+    const fn = ref.on('value', s => {
+      room = s.val();
+      if (!room) { if (!fired) { fired = true; Core.toast('A sala foi encerrada'); o.onLeave(true); } return; }
+      render();
+      if (room.status === 'playing' && !fired) { fired = true; o.onPlaying && o.onPlaying(room); }
+    });
+    render();
+    return { el, destroy: () => ref.off('value', fn) };
+  };
+
   // (?nofb na URL desliga o init automático — usado só nos testes automatizados)
   window.addEventListener('load', () => { if (!/[?&]nofb/.test(location.search)) S.init(); });
 })();

@@ -90,8 +90,12 @@
     root.append(Core.topbar('POKER HOLD\'EM', h('button', { class: 'btn icon', title: 'Ranking das mãos', onclick: showRanks }, '?')));
     P.box = h('div', { class: 'poker' }); root.append(P.box);
     showSetup();
+    if (Core.pendingRoom && Core.pendingRoom.game === 'poker') { const inv = Core.pendingRoom; Core.pendingRoom = null; joinPoker(inv); }
   }
-  function unmount() { P = null; }
+  function unmount() {
+    if (P) { if (P.lobby) P.lobby.destroy(); cleanupOnline(); P.tok = {}; }
+    P = null;
+  }
 
   function showRanks() {
     const rows = [['Royal / Straight Flush', 'Sequência do mesmo naipe'], ['Quadra', '4 cartas iguais'], ['Full House', 'Trinca + par'], ['Flush', '5 cartas do mesmo naipe'], ['Sequência', '5 cartas seguidas'], ['Trinca', '3 cartas iguais'], ['Dois Pares', ''], ['Par', ''], ['Carta Alta', '']];
@@ -99,7 +103,8 @@
   }
 
   function showSetup() {
-    P.tok = {}; P.box.innerHTML = '';
+    P.tok = {}; P.box.innerHTML = ''; P.online = null;
+    if (P.lobby) { P.lobby.destroy(); P.lobby = null; }
     const mk = (arr, key, store) => arr.map(([k, t, d]) => {
       const b = h('button', { class: 'opt-card' + (P[key] === k ? ' active' : ''), onclick: () => { P[key] = k; Core.store.set(store, k); Core.$$('.opt-card', b.parentNode).forEach(x => x.classList.remove('active')); b.classList.add('active'); } }, h('b', null, t), h('span', null, d));
       return b;
@@ -109,13 +114,15 @@
       h('div', { class: 'panel' }, h('h3', null, 'Habilidade das IAs'), h('div', { class: 'opt' }, mk([[0.5, 'Fácil', 'Mais erros'], [1, 'Normal', 'Equilibrado'], [1.6, 'Difícil', 'Mais simulações']], 'skill', 'poker.skill'))),
       h('div', { class: 'panel' }, h('h3', null, 'Adversários'), h('div', { class: 'small muted', style: { lineHeight: 1.7 } }, PERSONAS.map(p => `${p.emoji} ${p.name} — ${p.desc}`).join(' · '))),
       h('div', { class: 'panel small muted', style: { lineHeight: 1.5 } }, 'Torneio estilo <i>sit&amp;go</i>: 6 jogadores, blinds sobem a cada ' + HANDS_PER_LEVEL + ' mãos. Vence quem ficar com todas as fichas.'.replace('&amp;', '&')),
-      h('button', { class: 'btn primary lg block', onclick: startGame }, '▶ Sentar na mesa'),
+      h('button', { class: 'btn primary lg block', onclick: startGame }, '▶ Sentar na mesa (contra IAs)'),
+      (P.lobby = Core.Social ? Core.Social.lobby({ game: 'poker', multi: true, max: 5, createLabel: '♠ Criar sala e convidar', onCreate: createPokerRoom, resumeKey: 'poker.room', onResume: resumePoker }) : null) && P.lobby.el,
       h('button', { class: 'btn block', onclick: showRanks }, '🃏 Ranking das mãos')));
   }
 
   // ---------------- jogo ----------------
   function startGame() {
-    P.tok = {}; const tok = P.tok;
+    P.tok = {}; const tok = P.tok; P.online = null; P.logText = '';
+    if (P.lobby) { P.lobby.destroy(); P.lobby = null; }
     const pool = shuffle(PERSONAS).slice(0, 5);
     P.players = [{ id: 0, name: Core.settings.name, emoji: '🙂', human: true, chips: P.chips, hole: [], out: false }]
       .concat(pool.map((s, i) => ({ id: i + 1, name: s.name, emoji: s.emoji, human: false, style: s, chips: P.chips, hole: [], out: false })));
@@ -154,7 +161,7 @@
     P.box.append(P.ui.head, P.ui.table, P.ui.log, P.ui.hand, P.ui.info, P.ui.ctl,
       h('div', { class: 'row sb', style: { padding: '4px 8px' } },
         h('label', { class: 'row small muted' }, h('span', { class: 'switch' }, eqToggle, h('i')), h('span', null, 'Mostrar minha chance de vitória')),
-        h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo')));
+        P.online ? h('button', { class: 'btn sm danger', onclick: () => leaveOnline(true) }, '⎋ Sair') : h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo')));
     renderAll();
   }
 
@@ -203,36 +210,41 @@
       });
       P.ui.handKey = handKey; P.ui.handBase = handBase;
     }
+    pubSchedule();
   }
   const potTotal = () => P.players.reduce((a, p) => a + (p.total || 0), 0);
-  function setAct(p, text, cls) { const s = P.ui.seats[p.id]; s.act.textContent = text || ''; s.act.className = 'ps-act ' + (cls || ''); }
-  function log(t) { if (P && P.ui.log) P.ui.log.textContent = t; }
+  function setAct(p, text, cls) { p.actText = text || ''; p.actCls = cls || ''; const s = P.ui.seats[p.id]; s.act.textContent = text || ''; s.act.className = 'ps-act ' + (cls || ''); }
+  function log(t) { if (!P) return; P.logText = t; if (P.ui && P.ui.log) P.ui.log.textContent = t; pubSchedule(); }
 
   const wait = async ms => { const tok = P.tok; await sleep(ms); if (!P || P.tok !== tok) throw new Abort(); };
   function humanInput() { const tok = P.tok; return new Promise(res => { P.pending = { res, tok }; }); }
   function resolveHuman(v) { if (P.pending && P.pending.tok === P.tok) { const p = P.pending; P.pending = null; p.res(v); } }
 
+  const humanAlive = () => P.players.some(p => (p.human || p.remote) && !p.out);
   async function runGame(tok) {
     while (true) {
       const alive = P.players.filter(p => !p.out);
-      if (alive.length <= 1 || P.players[0].out) break;
+      if (alive.length <= 1 || !humanAlive()) break;
       await playHand();
       if (!P || P.tok !== tok) return;
       // eliminações
       for (const p of P.players) if (!p.out && p.chips <= 0) { p.out = true; if (!p.human) log(`${p.name} foi eliminado!`); }
       renderAll();
-      if (P.players[0].out) break;
+      if (!humanAlive()) break;
       if (P.players.filter(p => !p.out).length <= 1) break;
       await nextHandPrompt();
     }
-    const won = !P.players[0].out;
+    const left = P.players.filter(p => !p.out), champ = left.length === 1 ? left[0] : null;
+    const won = !!(champ && champ.human), online = !!P.online;
+    if (online) { P.online.over = { name: champ ? champ.name : '', uid: champ ? (champ.human ? P.online.hostUid : (champ.remote || '')) : '' }; await pubNow(); }
     Core.snd(won ? 'win' : 'lose'); if (won) Core.addStat('pokerWin');
     const v = await Core.modal({
-      title: won ? 'Você é o campeão! 🏆' : 'Você foi eliminado 😔',
-      body: won ? `Você ficou com todas as fichas em ${P.handNo} mãos.` : `Você caiu na mão #${P.handNo}.`,
-      buttons: [{ text: 'Menu', cls: 'ghost', value: 'm' }, { text: 'Jogar de novo', cls: 'primary', value: 'r' }]
+      title: won ? 'Você é o campeão! 🏆' : (online && champ ? `${champ.name} venceu o torneio` : 'Você foi eliminado 😔'),
+      body: won ? `Você ficou com todas as fichas em ${P.handNo} mãos.` : `Fim de jogo na mão #${P.handNo}.`,
+      buttons: [{ text: 'Menu', cls: 'ghost', value: 'm' }, online ? { text: 'Fechar a mesa', cls: 'primary', value: 'l' } : { text: 'Jogar de novo', cls: 'primary', value: 'r' }]
     });
     if (!P) return;
+    if (online) { await leaveOnline(false); if (v === 'm') Core.go(''); return; }
     if (v === 'r') startGame(); else Core.go('');
   }
   async function nextHandPrompt() {
@@ -314,7 +326,7 @@
       const p = P.players[idx];
       P.turn = idx; renderAll();
       let act;
-      if (p.human) act = await humanTurn(p, S); else act = await aiTurn(p, S);
+      if (p.human) act = await humanTurn(p, S); else if (p.remote) act = await remoteTurn(p, S); else act = await aiTurn(p, S);
       applyAction(p, act, S);
       needAct.delete(idx);
       if (act.type === 'raise' && act.reopen) {
@@ -350,25 +362,31 @@
 
   // ---------------- vez do humano ----------------
   async function humanTurn(p, S) {
-    const toCall = S.currentBet - p.bet;
-    const callAmt = Math.min(toCall, p.chips);
-    const minTo = Math.min(p.bet + p.chips, S.currentBet === 0 ? Math.max(P.BB, 1) : S.currentBet + S.minRaise);
-    const maxTo = p.bet + p.chips;
-    const canRaise = p.chips > toCall; // sobra algo além do call
-    const pot = potTotal();
+    const toCall = S.currentBet - p.bet, maxTo = p.bet + p.chips;
+    const info = {
+      toCall, callAmt: Math.min(toCall, p.chips), minTo: Math.min(maxTo, S.currentBet === 0 ? Math.max(P.BB, 1) : S.currentBet + S.minRaise),
+      maxTo, canRaise: p.chips > toCall, pot: potTotal(), cur: S.currentBet
+    };
+    Core.snd('turn');
+    buildControls(p, info, resolveHuman);
+    const act = await humanInput();
+    P.ui.ctl.innerHTML = '';
+    return act;
+  }
+  /** monta os botões de aposta (usado pelo jogador local e pelos convidados online) */
+  function buildControls(p, info, submit) {
+    const { toCall, callAmt, minTo, maxTo, canRaise, pot, cur } = info;
     let raiseTo = minTo;
     const ctl = P.ui.ctl; ctl.innerHTML = '';
-    Core.snd('turn');
-    // chance de vitória
     if (P.showEq) {
       const nOpp = inHand().length - 1;
       const eq = equity(p.hole, P.board, nOpp, 400);
-      let extra = P.board.length >= 3 ? ' · ' + describe(evalCards(p.hole.concat(P.board))) : '';
+      const extra = P.board.length >= 3 ? ' · ' + describe(evalCards(p.hole.concat(P.board))) : '';
       P.ui.info.innerHTML = `🎯 Chance de vitória: <b>${Math.round(eq * 100)}%</b>${extra}`;
     } else if (P.board.length >= 3) P.ui.info.innerHTML = '✋ ' + describe(evalCards(p.hole.concat(P.board)));
     else P.ui.info.innerHTML = '';
     const label = h('div', { class: 'rz-label' });
-    const unit = Math.max(1, Math.floor(P.SB / 2));
+    const unit = Math.max(1, Math.floor((P.SB || 10) / 2));
     const slider = h('input', { type: 'range', min: minTo, max: maxTo, value: minTo, step: 1 });
     const btnRaise = h('button', { class: 'btn primary grow lg' });
     const upd = () => {
@@ -377,24 +395,21 @@
       raiseTo = Math.max(minTo, Math.min(maxTo, v));
       const allin = raiseTo >= maxTo;
       label.innerHTML = `<b>${fmt(raiseTo)}</b>` + (allin ? ' · ALL-IN' : '');
-      btnRaise.textContent = allin ? 'ALL-IN' : (S.currentBet === 0 ? 'Apostar ' : 'Aumentar ') + (allin ? '' : fmt(raiseTo));
+      btnRaise.textContent = allin ? 'ALL-IN' : (cur === 0 ? 'Apostar ' : 'Aumentar ') + fmt(raiseTo);
     };
     const setTo = v => { raiseTo = Math.max(minTo, Math.min(maxTo, Math.round(v))); slider.value = raiseTo; upd(); };
     slider.oninput = upd; upd();
     const preset = (t, fn) => h('button', { class: 'btn sm grow', onclick: () => setTo(fn()) }, t);
-    const potRaise = f => () => S.currentBet + f * (pot + toCall);
+    const potRaise = f => () => cur + f * (pot + toCall);
     const raiseBox = h('div', { class: 'rz' },
       h('div', { class: 'row' }, preset('Mín', () => minTo), preset('½ Pote', potRaise(.5)), preset('¾', potRaise(.75)), preset('Pote', potRaise(1)), preset('All-in', () => maxTo)),
       h('div', { class: 'row' }, slider, label));
     const btns = h('div', { class: 'row p-btns' },
-      toCall > 0 ? h('button', { class: 'btn danger lg grow', onclick: () => resolveHuman({ type: 'fold' }) }, 'Fold') : null,
-      h('button', { class: 'btn blue lg grow', onclick: () => resolveHuman({ type: 'call' }) }, toCall === 0 ? 'Check' : (callAmt < toCall ? `All-in ${fmt(callAmt)}` : `Call ${fmt(callAmt)}`)),
+      toCall > 0 ? h('button', { class: 'btn danger lg grow', onclick: () => submit({ type: 'fold' }) }, 'Fold') : null,
+      h('button', { class: 'btn blue lg grow', onclick: () => submit({ type: 'call' }) }, toCall === 0 ? 'Check' : (callAmt < toCall ? `All-in ${fmt(callAmt)}` : `Call ${fmt(callAmt)}`)),
       canRaise ? btnRaise : null);
-    if (canRaise) { btnRaise.onclick = () => resolveHuman({ type: 'raise', to: raiseTo }); ctl.append(raiseBox); }
+    if (canRaise) { btnRaise.onclick = () => submit({ type: 'raise', to: raiseTo }); ctl.append(raiseBox); }
     ctl.append(btns);
-    const act = await humanInput();
-    ctl.innerHTML = '';
-    return act;
   }
 
   // ---------------- IA ----------------
@@ -411,7 +426,8 @@
     const n = nOpp + 1, fair = 1 / n;
     const potOdds = toCall / (pot + toCall || 1);
     const maxTo = p.bet + p.chips, minTo = Math.min(maxTo, S.currentBet === 0 ? P.BB : S.currentBet + S.minRaise);
-    const raiseTo = f => Math.min(maxTo, Math.max(minTo, Math.round((S.currentBet + f * (pot + toCall)) / Math.max(1, P.SB / 2)) * Math.max(1, P.SB / 2)));
+    const unit = Math.max(1, Math.floor(P.SB / 2));
+    const raiseTo = f => Math.min(maxTo, Math.max(minTo, Math.round((S.currentBet + f * (pot + toCall)) / unit) * unit));
     const strong = fair + .22 + st.tight * .1;
     const monster = fair + .38 + st.tight * .08;
     const preflop = P.board.length === 0;
@@ -508,6 +524,217 @@
     return bestSet || keep;
   }
 
+  // ======================= ONLINE (Firebase) =======================
+  const So = () => Core.Social;
+  const enc = c => c.r + c.s;
+  const dec = code => ({ r: code[0], s: code[1], v: RV[code[0]] });
+
+  // ---- lobby / salas ----
+  async function createPokerRoom(friends) {
+    const so = So(); if (!so || !so.user || !friends.length) return;
+    try {
+      const rid = await so.createRoom('poker', friends, { chips: P.chips, skill: P.skill });
+      P.online = { rid, role: 'host', room: so.db.ref('rooms/' + rid), hostUid: so.user.uid, seq: 0, turnSeq: 0, pres: {}, refs: [], offs: [] };
+      showWait(true);
+    } catch (e) { console.error(e); Core.toast('Não foi possível criar a sala (verifique as regras do banco).', 4000); }
+  }
+  async function joinPoker(inv) {
+    const so = So();
+    if (!so || !so.user) { Core.toast('Entre na sua conta para aceitar o convite'); return; }
+    try {
+      const room = await so.joinMemberRoom(inv);
+      P.online = { rid: inv.room, role: 'guest', room: so.db.ref('rooms/' + inv.room), hostUid: room.host, refs: [], offs: [] };
+      Core.store.set('poker.room', { rid: inv.room });
+      showWait(false);
+    } catch (e) { console.error(e); Core.toast('Convite inválido ou expirado'); }
+  }
+  async function resumePoker() {
+    const saved = Core.store.get('poker.room', null), so = So(); if (!saved || !so.user) return;
+    try {
+      const snap = await so.db.ref('rooms/' + saved.rid).get();
+      if (!snap.exists()) { Core.store.set('poker.room', null); Core.toast('A sala não existe mais'); showSetup(); return; }
+      const room = snap.val();
+      if (room.host === so.user.uid) { Core.store.set('poker.room', null); showSetup(); return; }
+      P.online = { rid: saved.rid, role: 'guest', room: so.db.ref('rooms/' + saved.rid), hostUid: room.host, refs: [], offs: [] };
+      if (room.status === 'playing') startGuestView(room); else showWait(false);
+    } catch (e) { Core.store.set('poker.room', null); Core.toast('Não foi possível retomar'); showSetup(); }
+  }
+  function showWait(isHost) {
+    const O = P.online;
+    if (P.lobby) { P.lobby.destroy(); P.lobby = null; }
+    P.box.innerHTML = '';
+    O.wait = Core.Social.waitRoom({
+      rid: O.rid, isHost, minReady: 1, title: '♠ Sala de Poker',
+      onStart: uids => { O.wait.destroy(); O.wait = null; startOnlineHost(uids); },
+      onPlaying: room => { if (!isHost) { O.wait.destroy(); O.wait = null; startGuestView(room); } },
+      onLeave: closed => leaveOnline(!closed)
+    });
+    P.box.append(h('div', { class: 'tr-setup' }, O.wait.el));
+  }
+
+  // ---- anfitrião: monta a mesa com humanos remotos + IAs ----
+  function startOnlineHost(readyUids) {
+    const so = So(), O = P.online;
+    P.tok = {}; const tok = P.tok;
+    const snapPlayers = {};
+    O.room.child('players').get().then(snap => {
+      const pl = snap.val() || {};
+      const pool = shuffle(PERSONAS);
+      P.players = [{ id: 0, name: so.me.name, emoji: so.me.avatar, human: true, chips: P.chips, hole: [], out: false }];
+      readyUids.slice(0, 5).forEach((uid, i) => {
+        const info = pl[uid] || { name: 'Amigo', avatar: '🙂' };
+        P.players.push({ id: i + 1, name: info.name, emoji: info.avatar || '🙂', human: false, remote: uid, chips: P.chips, hole: [], out: false });
+      });
+      while (P.players.length < 6) { const s = pool.pop(); P.players.push({ id: P.players.length, name: s.name, emoji: s.emoji, human: false, style: s, chips: P.chips, hole: [], out: false }); }
+      P.button = rand(0, 5); P.handNo = 0; P.board = []; P.stage = ''; P.pending = null; P.logText = '';
+      O.privKeys = {};
+      readyUids.forEach(uid => { O.offs.push(so.watchPresence(uid, on => { O.pres[uid] = on; })); });
+      buildUI();
+      pubNow().then(() => O.room.child('status').set('playing')).then(() => {
+        runGame(tok).catch(e => { if (!(e instanceof Abort)) console.error(e); });
+      }).catch(e => { console.error(e); Core.toast('Erro ao iniciar a mesa'); });
+    });
+  }
+
+  // ---- publicação do estado (anfitrião) ----
+  function pubObj() {
+    const O = P.online;
+    return JSON.parse(JSON.stringify({
+      seq: ++O.seq, handNo: P.handNo, SB: P.SB || 0, BB: P.BB || 0, button: P.button, stage: P.stage || '', turn: P.turn,
+      board: P.board.map(enc), win: P.winCards ? Array.from(P.winCards) : [], log: P.logText || '', ask: O.ask || null, over: O.over || null,
+      players: P.players.map(p => ({
+        n: p.name, e: p.emoji, c: p.chips, b: p.bet || 0, t: p.total || 0, f: p.folded ? 1 : 0, a: p.allIn ? 1 : 0, o: p.out ? 1 : 0,
+        d: (p.hole && p.hole.length) ? 1 : 0, r: p.reveal ? 1 : 0, h: (p.reveal && !p.folded && !p.out && p.hole.length) ? p.hole.map(enc) : 0,
+        x: p.actText || '', xc: p.actCls || '', u: p.human ? O.hostUid : (p.remote || '')
+      }))
+    }));
+  }
+  function pubNow() {
+    const O = P.online; if (!O || O.role !== 'host') return Promise.resolve();
+    clearTimeout(O.pt); O.pt = null;
+    P.players.forEach(p => {
+      if (!p.remote) return;
+      const key = p.hole.map(enc).join(',');
+      if (O.privKeys[p.remote] !== key) { O.privKeys[p.remote] = key; So().db.ref('private/' + O.rid + '/' + p.remote).set(p.hole.map(enc)).catch(e => console.error(e)); }
+    });
+    return O.room.child('pub').set(pubObj()).catch(e => console.error(e));
+  }
+  function pubSchedule() { const O = P && P.online; if (!O || O.role !== 'host' || O.pt) return; O.pt = setTimeout(pubNow, 40); }
+
+  // ---- aguardar ação de um humano remoto ----
+  function waitAct(uid, id, ms) {
+    const O = P.online;
+    return new Promise(res => {
+      const ref = O.room.child('act/' + uid);
+      let done = false, t, iv, fn;
+      const finish = v => { if (done) return; done = true; ref.off('value', fn); clearTimeout(t); clearInterval(iv); res(v); };
+      fn = ref.on('value', s => { const v = s.val(); if (v && v.id === id) finish(v); });
+      t = setTimeout(() => finish(null), ms);
+      iv = setInterval(() => { if (O.pres && O.pres[uid] === false) finish(null); }, 1500);
+    });
+  }
+  async function remoteTurn(p, S) {
+    const O = P.online;
+    const toCall = S.currentBet - p.bet, callAmt = Math.min(toCall, p.chips), maxTo = p.bet + p.chips;
+    const minTo = Math.min(maxTo, S.currentBet === 0 ? Math.max(P.BB, 1) : S.currentBet + S.minRaise);
+    const canRaise = p.chips > toCall;
+    const id = ++O.turnSeq;
+    O.ask = { id, seat: p.id, uid: p.remote, toCall, callAmt, minTo, maxTo, canRaise, cur: S.currentBet, pot: potTotal() };
+    log(`${p.name} está decidindo…`); pubNow();
+    const act = await waitAct(p.remote, id, 50000);
+    O.ask = null;
+    if (act && act.type === 'fold' && toCall > 0) return { type: 'fold' };
+    if (act && act.type === 'raise' && canRaise) return { type: 'raise', to: Math.max(minTo, Math.min(maxTo, Math.round(+act.to || minTo))) };
+    if (act && act.type === 'call') return { type: 'call' };
+    return toCall > 0 ? { type: 'fold' } : { type: 'call' };   // tempo esgotado ou jogador offline
+  }
+
+  // ---- visão do convidado (somente leitura + envio de ações) ----
+  function startGuestView(room) {
+    const so = So(), O = P.online, me = so.user.uid;
+    P.tok = {};
+    if (P.lobby) { P.lobby.destroy(); P.lobby = null; }
+    P.players = [0, 1, 2, 3, 4, 5].map(i => ({ id: i, name: '…', emoji: '🙂', human: i === 0, chips: 0, hole: [], out: false }));
+    P.board = []; P.handNo = 0; P.button = 0; P.stage = ''; P.winCards = null; P.turn = -1; P.logText = '';
+    buildUI();
+    const on = (ref, ev, fn) => { ref.on(ev, fn, e => console.error(e)); O.refs.push([ref, ev, fn]); };
+    O.myHole = [];
+    on(so.db.ref('private/' + O.rid + '/' + me), 'value', s => { O.myHole = (s.val() || []).map(dec); if (O.lastPub) applyPub(O.lastPub); });
+    on(O.room.child('pub'), 'value', s => { if (s.val()) applyPub(s.val()); });
+    on(O.room.child('status'), 'value', s => { if (s.val() == null && !O.left) { Core.toast('A sala foi encerrada'); leaveOnline(false); } });
+    O.offs.push(so.watchPresence(O.hostUid, online => { if (P && P.online === O && !online && O.lastPub && !O.lastPub.over) Core.toast('O anfitrião está offline…', 3500); }));
+  }
+  function applyPub(pub) {
+    const so = So(), O = P.online, me = so.user.uid;
+    O.lastPub = pub;
+    let mySeat = pub.players.findIndex(q => q.u === me); if (mySeat < 0) mySeat = 0;
+    const view = seat => (seat - mySeat + 6) % 6;
+    P.players = [0, 1, 2, 3, 4, 5].map(vi => {
+      const seat = (mySeat + vi) % 6, q = pub.players[seat];
+      return {
+        id: vi, seat, name: q.n, emoji: q.e, human: vi === 0, chips: q.c, bet: q.b, total: q.t, folded: !!q.f, allIn: !!q.a, out: !!q.o, reveal: !!q.r,
+        hole: vi === 0 ? (O.myHole || []) : (q.h ? q.h.map(dec) : (q.d ? [{}, {}] : [])), actText: q.x, actCls: q.xc
+      };
+    });
+    P.handNo = pub.handNo; P.SB = pub.SB; P.BB = pub.BB; P.button = view(pub.button); P.stage = pub.stage; P.turn = pub.turn >= 0 ? view(pub.turn) : -1;
+    P.board = (pub.board || []).map(dec); P.winCards = pub.win && pub.win.length ? new Set(pub.win) : null; P.logText = pub.log;
+    P.players.forEach(p => {
+      const s = P.ui.seats[p.id];
+      s.plate.querySelector('.av').textContent = p.emoji; s.plate.querySelector('b').textContent = p.name;
+      s.el.classList.toggle('me', p.id === 0);
+    });
+    renderAll();
+    P.players.forEach(p => setAct(p, p.actText, p.actCls));
+    if (P.ui.log) P.ui.log.textContent = pub.log || '';
+    const a = pub.ask;
+    if (a && a.uid === me) {
+      if (O.shownAsk !== a.id) {
+        O.shownAsk = a.id;
+        Core.snd('turn');
+        P.ui.info.innerHTML = P.board.length >= 3 ? '✋ ' + describe(evalCards(P.players[0].hole.concat(P.board))) : '';
+        buildControls(P.players[0], { toCall: a.toCall, callAmt: a.callAmt, minTo: a.minTo, maxTo: a.maxTo, canRaise: a.canRaise, pot: a.pot, cur: a.cur }, act => {
+          P.ui.ctl.innerHTML = '';
+          const rec = { id: a.id, type: act.type }; if (act.type === 'raise') rec.to = act.to;
+          O.room.child('act/' + me).set(rec).catch(e => { console.error(e); Core.toast('Falha ao enviar a ação'); });
+        });
+      }
+    } else if (O.shownAsk != null) { O.shownAsk = null; P.ui.ctl.innerHTML = ''; }
+    if (pub.over && !O.overShown) {
+      O.overShown = true;
+      const won = pub.over.uid === me;
+      Core.snd(won ? 'win' : 'lose'); if (won) Core.addStat('pokerWin');
+      Core.modal({ title: won ? 'Você é o campeão! 🏆' : `${pub.over.name} venceu o torneio`, body: `Fim de jogo na mão #${pub.handNo}.`, buttons: [{ text: 'Sair da sala', cls: 'primary', value: 1 }] })
+        .then(() => leaveOnline(false));
+    }
+  }
+
+  function cleanupOnline() {
+    const O = P && P.online; if (!O) return;
+    O.left = true;
+    (O.refs || []).forEach(([ref, ev, fn]) => { try { ref.off(ev, fn); } catch (e) { /* ok */ } });
+    (O.offs || []).forEach(f => { try { f(); } catch (e) { /* ok */ } });
+    if (O.wait) { O.wait.destroy(); O.wait = null; }
+    clearTimeout(O.pt);
+    O.refs = []; O.offs = [];
+  }
+  async function leaveOnline(ask) {
+    const O = P && P.online; if (!O) return;
+    if (ask === true && O.role === 'host' && P.players) {
+      const ok = await Core.modal({ title: 'Encerrar a mesa?', body: 'Os amigos serão desconectados.', buttons: [{ text: 'Continuar', cls: 'ghost', value: false }, { text: 'Encerrar', cls: 'danger', value: true }] });
+      if (!ok || !P || P.online !== O) return;
+    }
+    P.tok = {};
+    const so = So();
+    try {
+      if (O.role === 'host') { await Promise.all(Object.keys(O.privKeys || {}).map(u => so.db.ref('private/' + O.rid + '/' + u).remove().catch(() => { }))); await O.room.remove(); }
+      else if (so.user) await so.db.ref('rooms/' + O.rid + '/ready/' + so.user.uid).set(false).catch(() => { });
+    } catch (e) { console.error(e); }
+    cleanupOnline(); Core.store.set('poker.room', null);
+    P.online = null; P.pending = null;
+    showSetup();
+  }
+
   window.PokerEval = { evalCards, describe, equity, mkDeck };
-  Core.register('poker', { mount, unmount });
+  Core.register('poker', { mount, unmount, joinRoom: inv => { if (P) joinPoker(inv); } });
+
 })();

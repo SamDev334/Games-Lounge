@@ -157,8 +157,16 @@
     root.append(Core.topbar('GAMÃO', h('button', { class: 'btn icon', title: 'Regras', onclick: showRules }, '?')));
     G.box = h('div', { class: 'gamao', 'data-gt': G.theme }); root.append(G.box);
     showSetup();
+    if (Core.pendingRoom && Core.pendingRoom.game === 'gamao') { const inv = Core.pendingRoom; Core.pendingRoom = null; joinRoom(inv); }
   }
-  function unmount() { if (G) window.removeEventListener('resize', G.onResize); G = null; }
+  function unmount() {
+    if (G) {
+      window.removeEventListener('resize', G.onResize);
+      if (G.lobby) G.lobby.destroy();
+      cleanupOnline(); G.tok = {};
+    }
+    G = null;
+  }
 
   function showRules() {
     Core.modal({
@@ -176,18 +184,21 @@
   }
 
   function showSetup() {
-    G.tok = {}; G.box.innerHTML = ''; G.phase = 'idle';
+    G.tok = {}; G.box.innerHTML = ''; G.phase = 'idle'; G.online = null;
+    if (G.lobby) { G.lobby.destroy(); G.lobby = null; }
     const lv = LEVELS.map(([t, d], i) => h('button', { class: 'opt-card' + (G.level === i ? ' active' : ''), onclick: e => { G.level = i; Core.store.set('gamao.level', i); Core.$$('.opt-card', e.currentTarget.parentNode).forEach(x => x.classList.remove('active')); e.currentTarget.classList.add('active'); } }, h('b', null, t), h('span', null, d)));
     const th = [['classic', 'Madeira'], ['blue', 'Azul'], ['dark', 'Noturno'], ['green', 'Verde']].map(([k, t]) => h('button', { class: 'opt-card' + (G.theme === k ? ' active' : ''), onclick: e => { G.theme = k; Core.store.set('gamao.theme', k); G.box.dataset.gt = k; Core.$$('.opt-card', e.currentTarget.parentNode).forEach(x => x.classList.remove('active')); e.currentTarget.classList.add('active'); } }, h('b', null, t)));
     G.box.append(h('div', { class: 'tr-setup' },
       h('div', { class: 'panel' }, h('h3', null, 'Nível da IA'), h('div', { class: 'opt' }, lv)),
       h('div', { class: 'panel' }, h('h3', null, 'Tabuleiro'), h('div', { class: 'opt' }, th)),
-      h('button', { class: 'btn primary lg block', onclick: startGame }, '▶ Jogar'),
+      h('button', { class: 'btn primary lg block', onclick: startGame }, '▶ Jogar contra a IA'),
+      (G.lobby = Core.Social ? Core.Social.lobby({ game: 'gamao', onCreate: f => challengeGamao(f[0]), resumeKey: 'gamao.room', onResume: resumeGamao }) : null) && G.lobby.el,
       h('button', { class: 'btn block', onclick: showRules }, '📖 Regras')));
   }
 
   function startGame() {
-    G.tok = {}; const tok = G.tok;
+    G.tok = {}; const tok = G.tok; G.online = null;
+    if (G.lobby) { G.lobby.destroy(); G.lobby = null; }
     G.st = startState(); G.undo = []; G.sel = null; G.last = null; G.cands = []; G.dice = []; G.avail = [];
     buildUI(); renderBoard();
     runGame(tok).catch(e => { if (!(e instanceof Abort)) console.error(e); });
@@ -200,7 +211,7 @@
       msg: h('div', { class: 'g-msg' }), btns: h('div', { class: 'g-btns' })
     };
     G.box.append(G.ui.info, G.ui.boardWrap, G.ui.msg, G.ui.dice, G.ui.btns,
-      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo'), h('button', { class: 'btn sm', onclick: showRules }, '📖 Regras')));
+      h('div', { class: 'row', style: { justifyContent: 'center' } }, G.online ? h('button', { class: 'btn sm danger', onclick: () => leaveOnline(true) }, '⎋ Sair da partida') : h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo'), h('button', { class: 'btn sm', onclick: showRules }, '📖 Regras')));
     G.ui.boardWrap.addEventListener('click', onBoardClick);
   }
 
@@ -229,22 +240,29 @@
       if (G.st.off[G.turn] === 15) break;
       G.turn ^= 1;
     }
-    const w = G.turn, loser = w ^ 1;
-    let pts = 1, kind = 'Vitória simples';
-    if (G.st.off[loser] === 0) {
+    await endMatch(G.turn);
+  }
+
+  async function endMatch(w, opt) {
+    opt = opt || {};
+    const O = G.online, loser = w ^ 1;
+    let pts = 1, kind = opt.resign ? 'Desistência do adversário' : 'Vitória simples';
+    if (!opt.resign && G.st.off[loser] === 0) {
       pts = 2; kind = 'Gammon!';
       let back = G.st.bar[loser] > 0;
-      const s = loser ? -1 : 1;
-      for (let r = 19; r <= 24 && !back; r++) if (G.st.pts[A(loser, r)] * s > 0) back = true;
+      const s2 = loser ? -1 : 1;
+      for (let r = 19; r <= 24 && !back; r++) if (G.st.pts[A(loser, r)] * s2 > 0) back = true;
       if (back) { pts = 3; kind = 'Backgammon!'; }
     }
-    G.phase = 'over'; renderBoard(); renderDice(false); G.ui.btns.innerHTML = '';
+    G.phase = 'over'; renderBoard(); renderDice(false); if (G.ui) G.ui.btns.innerHTML = '';
     Core.snd(w === 0 ? 'win' : 'lose'); if (w === 0) Core.addStat('gamaoWin');
     const v = await Core.modal({
-      title: w === 0 ? 'Você venceu! 🏆' : 'A IA venceu 😔', body: `${kind} — <b>${pts}</b> ponto${pts > 1 ? 's' : ''}.`,
-      buttons: [{ text: 'Menu', cls: 'ghost', value: 'm' }, { text: 'Jogar de novo', cls: 'primary', value: 'r' }]
+      title: w === 0 ? 'Você venceu! 🏆' : (O ? `${O.oppName} venceu 😔` : 'A IA venceu 😔'),
+      body: opt.resign ? (w === 0 ? `${O.oppName} desistiu.` : 'Você desistiu.') : `${kind} — <b>${pts}</b> ponto${pts > 1 ? 's' : ''}.`,
+      buttons: [{ text: 'Menu', cls: 'ghost', value: 'm' }, O ? { text: 'Voltar ao lobby', cls: 'primary', value: 'l' } : { text: 'Jogar de novo', cls: 'primary', value: 'r' }]
     });
     if (!G) return;
+    if (O) { await leaveOnline(false); if (v === 'm') Core.go(''); return; }
     if (v === 'r') startGame(); else Core.go('');
   }
 
@@ -262,6 +280,7 @@
       await humanInput();
       G.ui.btns.innerHTML = '';
       dice = [rollDie(), rollDie()];
+      if (G.online && G.online.onDice) G.online.onDice(dice);
       Core.snd('dice'); renderDice(true, dice); await wait(750);
     }
     G.dice = dice;
@@ -281,6 +300,7 @@
       const act = await humanInput();
       if (act && act.type === 'move') {
         pushUndo();
+        if (G.doneMoves) G.doneMoves.push(act.m);
         const hit = applyMove(G.st, 0, act.m);
         const k = mkey(act.m);
         G.cands = G.cands.map(c => { const i = c.rem.findIndex(x => mkey(x) === k); if (i < 0) return null; const rem = c.rem.slice(); rem.splice(i, 1); return { rem, state: c.state }; }).filter(Boolean);
@@ -298,10 +318,10 @@
     G.ui.btns.innerHTML = ''; G.sel = null; renderBoard();
     await wait(500);
   }
-  function pushUndo() { G.undo.push({ st: clone(G.st), cands: G.cands, avail: G.avail.slice(), last: G.last }); }
+  function pushUndo() { G.undo.push({ st: clone(G.st), cands: G.cands, avail: G.avail.slice(), last: G.last, done: G.doneMoves ? G.doneMoves.length : 0 }); }
   function doUndo() {
     const u = G.undo.pop(); if (!u) return;
-    G.st = u.st; G.cands = u.cands; G.avail = u.avail; G.last = u.last; G.sel = null;
+    G.st = u.st; G.cands = u.cands; G.avail = u.avail; G.last = u.last; G.sel = null; if (G.doneMoves) G.doneMoves.length = u.done;
     Core.snd('select'); renderBoard(); renderDice(false); renderButtons(); renderInfo();
   }
   function renderButtons() {
@@ -401,7 +421,7 @@
     const you = pips(G.st, 0), ai = pips(G.st, 1);
     G.ui.info.innerHTML =
       `<div class="gi you ${G.turn === 0 && G.phase === 'human' ? 'on' : ''}"><span class="dot c0"></span><b>Você</b><small>${you} pips · fora ${G.st.off[0]}</small></div>` +
-      `<div class="gi ai ${G.phase === 'ai' ? 'on' : ''}"><span class="dot c1"></span><b>IA ${LEVELS[G.level][0]}</b><small>${ai} pips · fora ${G.st.off[1]}</small></div>`;
+      `<div class="gi ai ${G.phase === 'ai' ? 'on' : ''}"><span class="dot c1"></span><b>${G.online ? G.online.oppAvatar + ' ' + G.online.oppName + (G.online.oppOnline ? ' 🟢' : ' ⚪') : 'IA ' + LEVELS[G.level][0]}</b><small>${ai} pips · fora ${G.st.off[1]}</small></div>`;
   }
   function dieEl(v, used, rolling) {
     const pat = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] }[v];
@@ -489,6 +509,182 @@
     G.ui.boardWrap.classList.toggle('portrait', P);
   }
 
-  Core.register('gamao', { mount, unmount });
+  // ======================= ONLINE (Firebase) =======================
+  const So = () => Core.Social;
+  const toArr = x => (Array.isArray(x) ? x : Object.keys(x || {}).sort((a, b) => a - b).map(k => x[k]));
+
+  async function challengeGamao(f) {
+    const so = So(); if (!so || !so.user) return;
+    if (!f.online) { Core.toast(f.name + ' está offline'); return; }
+    const me = so.user.uid, a = rollDie();
+    let b; do { b = rollDie(); } while (b === a);
+    const rid = so.db.ref('rooms').push().key;
+    try {
+      await so.db.ref('rooms/' + rid).set({ game: 'gamao', host: me, guest: f.uid, hostName: so.me.name, hostAvatar: so.me.avatar, guestName: f.name, guestAvatar: f.avatar, open: { a, b }, created: so.TS, status: 'waiting' });
+      await so.sendInvite(f.uid, 'gamao', rid);
+    } catch (e) { console.error(e); Core.toast('Não foi possível criar a partida (verifique as regras do banco).', 4000); return; }
+    startOnline({ rid, role: 'host', oppUid: f.uid, oppName: f.name, oppAvatar: f.avatar, open: { a, b } });
+    Core.toast('Convite enviado para ' + f.name);
+  }
+  async function joinRoom(inv) {
+    const so = So();
+    if (!so || !so.user) { Core.toast('Entre na sua conta para aceitar o convite'); return; }
+    if (G.online) { Core.toast('Você já está em uma partida online'); return; }
+    try {
+      const snap = await so.db.ref('rooms/' + inv.room).get();
+      if (!snap.exists()) { Core.toast('Convite expirado'); return; }
+      const r = snap.val();
+      if (r.guest !== so.user.uid) { Core.toast('Convite inválido'); return; }
+      startOnline({ rid: inv.room, role: 'guest', oppUid: r.host, oppName: r.hostName || 'Amigo', oppAvatar: r.hostAvatar || '🙂', open: r.open });
+    } catch (e) { console.error(e); Core.toast('Convite inválido ou expirado'); }
+  }
+  async function resumeGamao() {
+    const saved = Core.store.get('gamao.room', null), so = So(); if (!saved || !so.user) return;
+    try {
+      const snap = await so.db.ref('rooms/' + saved.rid).get();
+      if (!snap.exists()) { Core.store.set('gamao.room', null); Core.toast('A partida não existe mais'); showSetup(); return; }
+      const r = snap.val(), host = r.host === so.user.uid;
+      startOnline({ rid: saved.rid, role: host ? 'host' : 'guest', oppUid: host ? r.guest : r.host, oppName: (host ? r.guestName : r.hostName) || 'Amigo', oppAvatar: (host ? r.guestAvatar : r.hostAvatar) || '🙂', open: r.open });
+    } catch (e) { Core.store.set('gamao.room', null); Core.toast('Não foi possível retomar'); showSetup(); }
+  }
+
+  function startOnline(info) {
+    const so = So();
+    G.tok = {}; const tok = G.tok;
+    const O = G.online = Object.assign({}, info, { live: false, refs: [], turns: {}, waiters: [], oppOnline: false, n: 0 });
+    if (G.lobby) { G.lobby.destroy(); G.lobby = null; }
+    G.st = startState(); G.undo = []; G.sel = null; G.last = null; G.cands = []; G.dice = []; G.avail = []; G.doneMoves = [];
+    Core.store.set('gamao.room', { rid: info.rid, role: info.role });
+    buildUI(); renderBoard();
+    const room = O.room = so.db.ref('rooms/' + info.rid);
+    const on = (ref, ev, fn) => { ref.on(ev, fn, e => console.error(e)); O.refs.push([ref, ev, fn]); };
+    on(room.child('status'), 'value', s => { if (s.val() === 'playing' && !O.live) { O.live = true; if (O.onLive) O.onLive(); } });
+    on(room.child('turns'), 'value', s => { O.turns = s.val() || {}; O.waiters = O.waiters.filter(w => !w()); });
+    on(room.child('result'), 'value', s => handleResult(s.val()));
+    O.offPres = so.watchPresence(O.oppUid, online => { O.oppOnline = online; if (G && G.online === O) renderInfo(); });
+    if (O.role === 'guest') room.child('status').set('playing').catch(e => console.error(e));
+    runOnline(tok).catch(e => { if (!(e instanceof Abort)) console.error(e); });
+  }
+
+  function waitTurn(n, kind) {
+    const O = G.online;
+    return new Promise(res => {
+      const check = () => {
+        const t = O.turns[n];
+        if (t && t.dice && (kind === 'dice' || t.moves || t.pass)) { res(t); return true; }
+        return false;
+      };
+      if (!check()) O.waiters.push(check);
+    });
+  }
+  async function writeTurn(n, dice) {
+    const O = G.online; if (O.turns[n]) return;
+    await O.room.child('turns/' + n).set({ by: So().user.uid, dice: { 0: dice[0], 1: dice[1] } });
+  }
+
+  async function runOnline(tok) {
+    const O = G.online, so = So(), me = so.user.uid;
+    say('Aguardando o amigo entrar…'); renderInfo();
+    await new Promise(res => { if (O.live) res(); else O.onLive = res; });
+    if (G.tok !== tok) throw new Abort();
+    const firstIsMe = (O.open.a > O.open.b) === (O.role === 'host');
+    const ownerIsMe = n => (n % 2 === 0 ? firstIsMe : !firstIsMe);
+    // reaplica turnos já concluídos (retomada)
+    const snap = await O.room.child('turns').get(); const tv = snap.val() || {};
+    let n = 0;
+    for (;;) {
+      const t = tv[n];
+      if (!t || !(t.moves || t.pass)) break;
+      const mine = t.by === me;
+      if (t.moves) toArr(t.moves).forEach(m => applyMove(G.st, mine ? 0 : 1, { f: m.f, t: m.t, d: m.d }));
+      if (G.st.off[mine ? 0 : 1] === 15) break;
+      n++;
+    }
+    O.turns = tv;
+    renderBoard(); renderInfo();
+    if (G.st.off[0] === 15 || G.st.off[1] === 15) { await endMatch(G.st.off[0] === 15 ? 0 : 1); return; }
+    if (n === 0) {
+      const my = O.role === 'host' ? O.open.a : O.open.b, op = O.role === 'host' ? O.open.b : O.open.a;
+      Core.snd('dice'); renderDice(true, [O.open.a, O.open.b]);
+      say(`Você tirou ${my}, ${O.oppName} tirou ${op}. ${firstIsMe ? 'Você começa!' : O.oppName + ' começa!'}`);
+      await wait(1900);
+    } else say('Partida retomada.');
+    for (;;) {
+      O.n = n; G.turn = ownerIsMe(n) ? 0 : 1;
+      if (G.turn === 0) await onlineMyTurn(n); else await onlineOppTurn(n);
+      if (G.st.off[G.turn] === 15) break;
+      n++;
+    }
+    await endMatch(G.turn);
+  }
+
+  async function onlineMyTurn(n) {
+    const O = G.online, me = So().user.uid;
+    const ex = O.turns[n];
+    let pre = null;
+    if (n === 0) pre = [O.open.a, O.open.b];
+    else if (ex && ex.dice && ex.by === me) pre = [ex.dice[0], ex.dice[1]];
+    O.onDice = dice => writeTurn(n, dice).catch(e => console.error(e));
+    if (pre) await writeTurn(n, pre);
+    G.doneMoves = [];
+    await humanTurn(pre);
+    O.onDice = null;
+    if (G.doneMoves.length) await O.room.child('turns/' + n + '/moves').set(G.doneMoves.map(m => ({ f: m.f, t: m.t, d: m.d })));
+    else await O.room.child('turns/' + n + '/pass').set(true);
+  }
+  async function onlineOppTurn(n) {
+    const O = G.online;
+    G.phase = 'ai'; G.sel = null; G.ui.btns.innerHTML = ''; G.dice = []; G.avail = [];
+    renderInfo(); renderDice(false); renderBoard();
+    say(`Vez de ${O.oppName}… aguardando os dados.`);
+    const t = await waitTurn(n, 'dice');
+    const dice = [t.dice[0], t.dice[1]];
+    G.dice = dice; G.avail = dice[0] === dice[1] ? [dice[0], dice[0], dice[0], dice[0]] : dice.slice();
+    if (n > 0) { Core.snd('dice'); renderDice(true, dice); await wait(800); }
+    renderDice(false);
+    say(`${O.oppName} está jogando…`);
+    const t2 = await waitTurn(n, 'done');
+    if (t2.pass) { say(`${O.oppName} não tem jogadas e passa a vez.`); await wait(1500); return; }
+    for (const m0 of toArr(t2.moves)) {
+      const m = { f: m0.f, t: m0.t, d: m0.d };
+      if (!singleMoves(G.st, 1, m.d).some(x => mkey(x) === mkey(m))) { Core.toast('Jogada inválida recebida'); return; }
+      const hit = applyMove(G.st, 1, m);
+      const di = G.avail.indexOf(m.d); if (di >= 0) G.avail.splice(di, 1);
+      G.last = { to: m.t, p: 1 };
+      Core.snd(hit ? 'capture' : (m.t === 0 ? 'chip' : 'move'));
+      say(hit ? `${O.oppName} acertou um dos seus checkers! 💥` : `${O.oppName} move ${m.f === 25 ? 'da barra' : m.f} → ${m.t === 0 ? 'fora' : m.t}`);
+      renderBoard(); renderDice(false); renderInfo();
+      await wait(650);
+    }
+  }
+  function handleResult(res) {
+    const O = G && G.online; if (!O || !res || G.phase === 'over') return;
+    if (res.type === 'resign') { G.tok = {}; endMatch(res.by === So().user.uid ? 1 : 0, { resign: true }); }
+  }
+  function cleanupOnline() {
+    const O = G && G.online; if (!O) return;
+    O.refs.forEach(([ref, ev, fn]) => { try { ref.off(ev, fn); } catch (e) { /* ok */ } });
+    O.refs = []; if (O.offPres) { O.offPres(); O.offPres = null; }
+  }
+  async function leaveOnline(ask) {
+    const O = G && G.online; if (!O) return;
+    const playing = O.live && G.phase !== 'over';
+    if (ask && playing) {
+      const ok = await Core.modal({ title: 'Sair da partida?', body: 'Sair agora conta como desistência.', buttons: [{ text: 'Continuar jogando', cls: 'ghost', value: false }, { text: 'Sair', cls: 'danger', value: true }] });
+      if (!ok || !G || G.online !== O) return;
+    }
+    G.tok = {};
+    const so = So(), me = so.user && so.user.uid;
+    try {
+      if (playing && me) await O.room.child('result').set({ type: 'resign', by: me });
+      if (O.role === 'host' && (!O.live || G.phase === 'over')) { await O.room.remove(); await so.db.ref('invites/' + O.oppUid + '/' + me).remove(); }
+    } catch (e) { console.error(e); }
+    cleanupOnline(); Core.store.set('gamao.room', null);
+    G.online = null; G.pending = null;
+    showSetup();
+  }
+
+  Core.register('gamao', { mount, unmount, joinRoom: inv => { if (G) joinRoom(inv); } });
+
   window.GamaoEngine = { genSequences, startState, evaluate, applyMove, singleMoves, pips };
 })();
