@@ -228,7 +228,7 @@
     S.holder = h('div', { class: 'board-holder' }, S.board.el);
     S.panel = h('div', { class: 'cside-body' });
     S.tabs = h('div', { class: 'seg full' },
-      [['play', '♟ Jogar'], ['tutorial', '🎓 Tutorial'], ['style', '🎨 Estilos']].map(([k, t]) =>
+      [['play', '♟ Jogar'], ['tutorial', '🎓 Tutorial'], ['style', '🎨 Estilos'], ['online', '🌐 Online']].map(([k, t]) =>
         h('button', { dataset: { k }, class: k === 'play' ? 'active' : '', onclick: () => setMode(k) }, t)));
 
     root.append(
@@ -239,12 +239,22 @@
 
     newGame(true);
     renderPanel();
+    if (Core.Social) S.unSocial = Core.Social.on(() => { if (S && S.mode === 'online') renderPanel(); });
+    if (Core.pendingRoom && Core.pendingRoom.game === 'chess') { const inv = Core.pendingRoom; Core.pendingRoom = null; setMode('online'); joinRoom(inv); }
   }
 
-  function unmount() { if (S) { S.token++; AI.cancel(); clearInterval(S.autoTimer); } S = null; }
+  function unmount() {
+    if (S) {
+      S.token++; AI.cancel(); clearInterval(S.autoTimer);
+      if (S.unSocial) S.unSocial();
+      if (S.online) cleanupOnline();
+    }
+    S = null;
+  }
 
   function setMode(k) {
     if (S.mode === k) return;
+    if (S.online && k !== 'online' && k !== 'style') { Core.toast('Saia da partida online primeiro (botão Sair).'); return; }
     S.token++; AI.cancel(); S.thinking = false; clearInterval(S.autoTimer); S.tut.auto = false;
     S.mode = k;
     Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === k));
@@ -252,6 +262,7 @@
     if (k === 'play') { restorePlayBoard(); }
     else if (k === 'tutorial') { if (S.tut.op) tutSetStep(S.tut.step, false, true); else { resetBoard(new E.Game()); } }
     else if (k === 'style') { /* mantém o tabuleiro atual */ }
+    else if (k === 'online') { if (!S.online) restorePlayBoard(); }
     renderPanel();
   }
 
@@ -277,7 +288,10 @@
   }
   function resetBoard(g) { S.board.setFlipped(false); S.board.setPosition(g.pos.b, null, false); S.board.setMarks({}); S.board.setArrows([]); }
 
-  function humanTurn() { return S.mode === 'play' && !S.over && !S.thinking && S.game.pos.turn === S.humanColor; }
+  function humanTurn() {
+    const ok = (S.mode === 'play' && !S.online) || (S.mode === 'online' && S.online && S.online.live);
+    return ok && !S.over && !S.thinking && S.game.pos.turn === S.humanColor;
+  }
 
   function refreshMarks() {
     const pos = S.game.pos, m = { last: S.last, hint: S.hint, sel: S.sel };
@@ -331,6 +345,7 @@
     });
   }
   function humanPlay(m) {
+    if (S.online) { sendMove(m); return; }
     if (!S.game.play(m)) return;
     S.hint = null; S.sel = null; S.targets = new Map(); S.board.setArrows([]);
     afterMove();
@@ -347,7 +362,7 @@
     maybeAI();
   }
   function maybeAI() {
-    if (S.mode !== 'play' || S.over) return;
+    if (S.mode !== 'play' || S.over || S.online) return;
     if (S.game.pos.turn !== S.humanColor) aiMove();
   }
   async function aiMove() {
@@ -372,18 +387,20 @@
     let title, msg, snd;
     const you = S.humanColor;
     if (st.kind === 'mate') {
-      if (st.winner === you) { title = 'Xeque-mate! Você venceu 🏆'; msg = 'Excelente partida contra o nível ' + LV[S.level].name + '.'; snd = 'win'; Core.addStat('chessWin'); }
-      else { title = 'Xeque-mate. A IA venceu'; msg = 'Tente de novo ou diminua o nível para treinar.'; snd = 'lose'; }
+      if (st.winner === you) { title = 'Xeque-mate! Você venceu 🏆'; msg = S.online ? `Boa partida contra ${S.online.oppName}.` : 'Excelente partida contra o nível ' + LV[S.level].name + '.'; snd = 'win'; Core.addStat('chessWin'); }
+      else { title = S.online ? `Xeque-mate. ${S.online.oppName} venceu` : 'Xeque-mate. A IA venceu'; msg = S.online ? 'Boa partida!' : 'Tente de novo ou diminua o nível para treinar.'; snd = 'lose'; }
     } else if (st.kind === 'resign') {
-      title = st.winner === you ? 'Vitória!' : 'Você desistiu'; msg = st.winner === you ? 'A IA abandonou.' : 'Partida encerrada.'; snd = st.winner === you ? 'win' : 'lose';
+      title = st.winner === you ? 'Vitória!' : 'Você desistiu'; msg = st.winner === you ? (S.online ? `${S.online.oppName} desistiu.` : 'A IA abandonou.') : 'Partida encerrada.'; snd = st.winner === you ? 'win' : 'lose';
     } else {
       title = 'Empate'; snd = 'draw';
       msg = { stalemate: 'Rei afogado: o jogador da vez não tem lances legais.', material: 'Material insuficiente para dar mate.', fifty: 'Regra dos 50 lances sem captura ou lance de peão.', repetition: 'Tripla repetição de posição.', agreed: 'Empate por acordo.' }[st.kind] || '';
     }
     S.over = true; S.lastResult = title; updateStatus();
     Core.snd(snd);
-    Core.modal({ title, body: msg, buttons: [{ text: 'Rever partida', cls: 'ghost', value: 'r' }, { text: 'Nova partida', cls: 'primary', value: 'n' }] })
-      .then(v => { if (v === 'n' && S) { newGame(); } });
+    const online = !!S.online;
+    if (online) { S.online.live = false; updateOnlineStatus(); }
+    Core.modal({ title, body: msg, buttons: [{ text: 'Rever partida', cls: 'ghost', value: 'r' }, online ? { text: 'Voltar ao lobby', cls: 'primary', value: 'l' } : { text: 'Nova partida', cls: 'primary', value: 'n' }] })
+      .then(v => { if (!S) return; if (v === 'n') newGame(); else if (v === 'l') leaveOnline(false); });
   }
 
   // ---------- barras de jogador / status / lances ----------
@@ -405,15 +422,15 @@
     const bottomColor = S.board.flipped ? 1 : 0, topColor = bottomColor ^ 1;
     const fill = (bar, color) => {
       const isYou = color === S.humanColor;
-      const lv = LV[S.level];
+      const lv = LV[S.level], o = S.online, so = Core.Social;
       const diff = material(color) - material(color ^ 1);
       bar.innerHTML = '';
       bar.append(
-        h('div', { class: 'av ' + (color ? 'blk' : 'wht') }, isYou ? '🙂' : '🤖'),
+        h('div', { class: 'av ' + (color ? 'blk' : 'wht') }, isYou ? (o && so && so.me ? so.me.avatar : '🙂') : (o ? o.oppAvatar : '🤖')),
         h('div', { class: 'grow' },
-          h('div', { class: 'nm' }, isYou ? Core.settings.name : `IA · ${lv.name}`, (!isYou && S.thinking) ? h('span', { class: 'dots' }, ' pensando') : null),
+          h('div', { class: 'nm' }, isYou ? (o && so && so.me ? so.me.name : Core.settings.name) : (o ? o.oppName : `IA · ${lv.name}`), (!isYou && S.thinking && !o) ? h('span', { class: 'dots' }, ' pensando') : null),
           h('div', { class: 'cap', html: capturedHtml(color) + (diff > 0 ? `<b class="adv">+${diff}</b>` : '') })),
-        h('div', { class: 'sub' }, isYou ? (color ? 'Pretas' : 'Brancas') : `~${lv.elo} Elo`));
+        h('div', { class: 'sub' }, isYou ? (color ? 'Pretas' : 'Brancas') : (o ? (o.oppOnline ? '🟢 online' : '⚪ offline') : `~${lv.elo} Elo`)));
       bar.classList.toggle('turn', S.game.pos.turn === color && !S.over);
     };
     fill(S.topBar, topColor); fill(S.botBar, bottomColor);
@@ -424,7 +441,8 @@
     const pos = S.game.pos;
     if (S.over) t = S.lastResult || 'Fim de jogo';
     else if (S.thinking) t = '🤖 IA pensando…';
-    else if (S.mode === 'play') t = (pos.turn === S.humanColor ? 'Sua vez' : 'Vez da IA') + (pos.inCheck() ? ' — XEQUE!' : '');
+    else if (S.online && !S.online.live) t = '⏳ Aguardando ' + S.online.oppName + '…';
+    else if (S.mode === 'play' || S.online) t = (pos.turn === S.humanColor ? 'Sua vez' : (S.online ? 'Vez de ' + S.online.oppName : 'Vez da IA')) + (pos.inCheck() ? ' — XEQUE!' : '');
     else t = '';
     S.status.textContent = t;
     S.status.classList.toggle('alert', !S.over && pos.inCheck());
@@ -443,9 +461,9 @@
   // ---------- painéis ----------
   function renderPanel() {
     S.panel.innerHTML = '';
-    if (S.mode === 'play') panelPlay(); else if (S.mode === 'tutorial') panelTutorial(); else panelStyle();
+    if (S.mode === 'play') panelPlay(); else if (S.mode === 'tutorial') panelTutorial(); else if (S.mode === 'online') panelOnline(); else panelStyle();
     S.topBar.classList.toggle('hide', S.mode === 'tutorial'); S.botBar.classList.toggle('hide', S.mode === 'tutorial');
-    if (S.mode === 'play') { updateBars(); updateMoves(); }
+    if (S.mode === 'play' || S.mode === 'online') { updateBars(); updateMoves(); }
     updateStatus();
   }
   function saveChess() { Core.store.set('chess', { level: S.level, color: S.colorPref, style: S.style }); }
@@ -754,5 +772,211 @@
   }
   function tutRebuildBoardOnly() { S.board.setPosition(S.tutGame.pos.b, null, false); }
 
-  Core.register('chess', { mount, unmount });
+  // ======================= ONLINE (Firebase) =======================
+  const So = () => Core.Social;
+  function myUid() { return So().user.uid; }
+
+  function panelOnline() {
+    const so = So();
+    const box = h('div', { class: 'panel' }); S.panel.append(box);
+    box.append(h('h3', null, 'Jogar online com amigos'));
+    if (!so || !so.enabled) { box.append(h('p', { class: 'muted' }, 'O modo online não está disponível agora (sem conexão com o serviço).')); return; }
+    if (!so.authReady) { box.append(h('p', { class: 'muted' }, 'Conectando…')); return; }
+    if (!so.user || !so.me) {
+      box.append(h('p', null, 'Entre com sua conta Google para adicionar amigos e jogar xadrez em tempo real, de qualquer lugar.'),
+        h('button', { class: 'btn primary block', onclick: () => so.openPanel({}) }, '🔐 Entrar / Criar conta'));
+      return;
+    }
+    if (S.online) { panelRoom(box); return; }
+    S.onlineColor = S.onlineColor || 'r';
+    const colorSeg = h('div', { class: 'seg full' }, [['w', '⚪ Brancas'], ['r', '🎲 Sorteio'], ['b', '⚫ Pretas']].map(([k, t]) =>
+      h('button', { class: S.onlineColor === k ? 'active' : '', onclick: e => { S.onlineColor = k; Core.$$('button', colorSeg).forEach(b => b.classList.remove('active')); e.currentTarget.classList.add('active'); } }, t)));
+    const me = so.me;
+    box.append(
+      h('div', { class: 'olrow' }, h('div', { class: 'av' }, me.avatar), h('div', { class: 'grow' }, h('b', null, me.name), h('div', { class: 'small muted' }, 'Código: ', h('b', { class: 'gold' }, me.code))),
+        h('button', { class: 'btn sm', onclick: () => so.openPanel({ invite: challenge }) }, '👥 Amigos' + ((so.requests.length) ? ` (${so.requests.length})` : ''))),
+      h('div', { style: { height: '10px' } }), h('div', { class: 'small muted', style: { marginBottom: '6px' } }, 'Suas peças ao desafiar:'), colorSeg);
+    const saved = Core.store.get('chess.room', null);
+    if (saved) box.append(h('div', { class: 'plan', style: { marginTop: '12px' } }, 'Você tem uma partida online em andamento. ',
+      h('button', { class: 'btn sm primary', onclick: resumeRoom }, '↻ Retomar'), ' ', h('button', { class: 'btn sm ghost', onclick: () => { Core.store.set('chess.room', null); renderPanel(); } }, 'Descartar')));
+    const friends = Array.from(so.friends.values()).sort((a, b) => (b.online - a.online) || a.name.localeCompare(b.name));
+    const list = h('div', { style: { marginTop: '12px' } });
+    if (!friends.length) list.append(h('p', { class: 'muted small' }, 'Você ainda não tem amigos adicionados. Toque em "Amigos" para adicionar com o código.'));
+    friends.forEach(f => list.append(h('div', { class: 'f-row' },
+      h('div', { class: 'av' }, f.avatar), h('span', { class: 'dot-st ' + (f.online ? 'on' : '') }),
+      h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'small muted' }, f.online ? 'online' : 'offline')),
+      h('button', { class: 'btn sm primary' + (f.online ? '' : ' disabled'), onclick: () => challenge(f) }, '⚔ Desafiar'))));
+    box.append(list);
+  }
+
+  function panelRoom(box) {
+    const O = S.online;
+    O.statusEl = h('div', { class: 'small muted' });
+    box.append(
+      h('div', { class: 'olrow' }, h('div', { class: 'av' }, O.oppAvatar), h('div', { class: 'grow' }, h('b', null, O.oppName), O.statusEl)),
+      h('div', { class: 'ctl-grid', style: { marginTop: '12px' } },
+        h('button', { class: 'btn sm danger', onclick: resignOnline }, '🏳 Desistir'),
+        h('button', { class: 'btn sm', onclick: offerDrawOnline }, '🤝 Empate'),
+        (O.leaveBtn = h('button', { class: 'btn sm', onclick: () => leaveOnline(true) }, '← Voltar'))));
+    S.movesEl = h('div', { class: 'moves' });
+    S.panel.append(h('div', { class: 'panel' }, h('h3', null, 'Lances'), S.movesEl));
+    updateMoves(); updateOnlineStatus();
+  }
+  function updateOnlineStatus() {
+    const O = S && S.online; if (!O || !O.statusEl) return;
+    if (O.leaveBtn) O.leaveBtn.textContent = S.over ? '← Voltar' : (O.live ? '⎋ Sair' : '✕ Cancelar');
+    O.statusEl.textContent = S.over ? 'Partida encerrada' : (!O.live ? '⏳ Aguardando o convite ser aceito…' : (O.oppOnline ? '🟢 online' : '⚪ offline (reconectando?)'));
+  }
+
+  async function challenge(f) {
+    const so = So(); if (!so || !so.user) return;
+    if (S.online) { Core.toast('Termine a partida atual primeiro'); return; }
+    if (S.mode !== 'online') setMode('online');
+    if (!f.online) { Core.toast(f.name + ' está offline'); return; }
+    const me = myUid(), db = so.db;
+    const hostColor = S.onlineColor === 'b' ? 1 : S.onlineColor === 'w' ? 0 : Core.rand(0, 1);
+    const rid = db.ref('rooms').push().key;
+    try {
+      await db.ref('rooms/' + rid).set({ game: 'chess', host: me, guest: f.uid, hostColor, hostName: so.me.name, hostAvatar: so.me.avatar, guestName: f.name, guestAvatar: f.avatar, created: so.TS, status: 'waiting' });
+      await so.sendInvite(f.uid, 'chess', rid);
+    } catch (e) { console.error(e); Core.toast('Não foi possível criar a partida (verifique as regras do banco).', 4000); return; }
+    startOnline({ rid, role: 'host', hostColor, oppUid: f.uid, oppName: f.name, oppAvatar: f.avatar });
+    Core.toast('Convite enviado para ' + f.name);
+  }
+  async function joinRoom(inv) {
+    const so = So();
+    if (!so || !so.user) { Core.toast('Entre na sua conta para aceitar o convite'); return; }
+    if (S.online) { Core.toast('Você já está em uma partida online'); return; }
+    try {
+      const snap = await so.db.ref('rooms/' + inv.room).get();
+      if (!snap.exists()) { Core.toast('Convite expirado'); return; }
+      const r = snap.val();
+      if (r.guest !== so.user.uid) { Core.toast('Convite inválido'); return; }
+      startOnline({ rid: inv.room, role: 'guest', hostColor: r.hostColor, oppUid: r.host, oppName: r.hostName || 'Amigo', oppAvatar: r.hostAvatar || '🙂' });
+    } catch (e) { console.error(e); Core.toast('Convite inválido ou expirado'); }
+  }
+  async function resumeRoom() {
+    const saved = Core.store.get('chess.room', null), so = So(); if (!saved || !so.user) return;
+    try {
+      const snap = await so.db.ref('rooms/' + saved.rid).get();
+      if (!snap.exists()) { Core.store.set('chess.room', null); Core.toast('A partida não existe mais'); renderPanel(); return; }
+      const r = snap.val(), me = so.user.uid, host = r.host === me;
+      startOnline({ rid: saved.rid, role: host ? 'host' : 'guest', hostColor: r.hostColor, oppUid: host ? r.guest : r.host, oppName: (host ? r.guestName : r.hostName) || 'Amigo', oppAvatar: (host ? r.guestAvatar : r.hostAvatar) || '🙂' });
+    } catch (e) { Core.store.set('chess.room', null); Core.toast('Não foi possível retomar a partida'); renderPanel(); }
+  }
+
+  function startOnline(info) {
+    const so = So(), db = so.db;
+    S.token++; AI.cancel(); S.thinking = false;
+    S.aiSave = { game: S.game, humanColor: S.humanColor, over: S.over, last: S.last, lastResult: S.lastResult };
+    const myColor = info.role === 'host' ? info.hostColor : info.hostColor ^ 1;
+    const O = S.online = { rid: info.rid, role: info.role, myColor, oppUid: info.oppUid, oppName: info.oppName, oppAvatar: info.oppAvatar, live: false, oppOnline: false, refs: [], drawOffered: false };
+    S.game = new E.Game(); S.humanColor = myColor; S.over = false; S.sel = null; S.targets = new Map(); S.last = null; S.hint = null; S.lastResult = '';
+    if (S.mode !== 'online') { S.mode = 'online'; Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === 'online')); S.root.classList.remove('mode-tut'); }
+    S.board.setFlipped(myColor === 1); S.board.setPosition(S.game.pos.b, null, false); S.board.setArrows([]); refreshMarks();
+    Core.store.set('chess.room', { rid: info.rid, role: info.role });
+    const room = O.room = db.ref('rooms/' + info.rid);
+    const on = (ref, ev, fn) => { ref.on(ev, fn, e => console.error(e)); O.refs.push([ref, ev, fn]); };
+    renderPanel(); updateBars(); updateStatus();
+    room.child('moves').get().then(snap => {
+      if (!S || S.online !== O) return;
+      const mv = snap.val() || {};
+      Object.keys(mv).map(Number).sort((a, b) => a - b).forEach(n => { if (n === S.game.history.length) S.game.play(mv[n].m); });
+      syncBoardFromGame();
+      on(room.child('moves'), 'child_added', s => applyRemote(+s.key, s.val()));
+      on(room.child('moves'), 'child_removed', () => { if (!S.over) resync(); });
+      on(room.child('status'), 'value', s => {
+        if (s.val() === 'playing' && !O.live) {
+          O.live = true; Core.snd('turn');
+          if (O.role === 'host') Core.toast(O.oppName + ' entrou! Boa partida.');
+          updateBars(); updateStatus(); updateOnlineStatus();
+        }
+      });
+      on(room.child('result'), 'value', s => handleResult(s.val()));
+      on(room.child('drawOffer'), 'value', s => handleDraw(s.val()));
+      on(db.ref('presence/' + O.oppUid), 'value', s => { const v = s.val(); O.oppOnline = !!(v && v.online); if (S && S.online === O) { updateBars(); updateOnlineStatus(); } });
+      if (O.role === 'guest') room.child('status').set('playing').catch(e => console.error(e));
+    }).catch(e => { console.error(e); Core.toast('Erro ao entrar na sala'); if (S && S.online === O) leaveOnline(false); });
+  }
+  function syncBoardFromGame() {
+    const hl = S.game.history[S.game.history.length - 1];
+    S.last = hl ? [hl.from, hl.to] : null;
+    S.board.setPosition(S.game.pos.b, null, false);
+    const st = S.game.status(); if (st.over) { S.over = true; S.lastResult = st.kind === 'mate' ? 'Xeque-mate' : 'Empate'; }
+    refreshMarks(); updateBars(); updateStatus(); updateMoves();
+  }
+  function applyRemote(n, val) {
+    const O = S && S.online; if (!O || S.over || !val) return;
+    const g = S.game;
+    if (n < g.history.length) return;
+    if (n > g.history.length) { resync(); return; }
+    const me = myUid(), expected = g.pos.turn === O.myColor ? me : O.oppUid;
+    if (val.by !== expected) return;
+    if (!g.play(val.m)) { Core.toast('Lance inválido recebido'); return; }
+    S.sel = null; S.targets = new Map(); S.hint = null; S.board.setArrows([]);
+    afterMove();
+  }
+  function sendMove(m) {
+    const O = S.online, n = S.game.history.length;
+    S.sel = null; S.targets = new Map(); S.hint = null; S.board.setArrows([]);
+    O.room.child('moves/' + n).set({ by: myUid(), m }).catch(e => { console.error(e); Core.toast('Falha ao enviar o lance'); });
+  }
+  async function resync() {
+    const O = S.online; if (!O) return;
+    const snap = await O.room.child('moves').get();
+    if (!S || S.online !== O) return;
+    const g = new E.Game(), mv = snap.val() || {};
+    Object.keys(mv).map(Number).sort((a, b) => a - b).forEach(n => { if (n === g.history.length) g.play(mv[n].m); });
+    S.game = g; syncBoardFromGame();
+  }
+  function handleResult(res) {
+    const O = S && S.online; if (!O || S.over || !res) return;
+    if (res.type === 'resign') finish({ over: true, kind: 'resign', winner: res.by === myUid() ? O.myColor ^ 1 : O.myColor });
+    else if (res.type === 'draw') finish({ over: true, kind: 'agreed', winner: -1 });
+  }
+  function handleDraw(v) {
+    const O = S && S.online; if (!O || S.over) return;
+    const me = myUid();
+    if (!v) { if (O.drawOffered) { O.drawOffered = false; Core.toast('Empate recusado'); } return; }
+    if (v === me) { O.drawOffered = true; return; }
+    Core.modal({ title: 'Proposta de empate', body: `${O.oppName} propõe empate. Aceitar?`, buttons: [{ text: 'Recusar', cls: 'ghost', value: false }, { text: 'Aceitar', cls: 'primary', value: true }] }).then(ok => {
+      if (!S || S.online !== O || S.over) return;
+      if (ok) O.room.child('result').set({ type: 'draw', by: me }); else O.room.child('drawOffer').remove();
+    });
+  }
+  async function resignOnline() {
+    const O = S.online; if (!O || !O.live || S.over) return;
+    const ok = await Core.modal({ title: 'Desistir?', body: 'Você perderá esta partida.', buttons: [{ text: 'Cancelar', cls: 'ghost', value: false }, { text: 'Desistir', cls: 'danger', value: true }] });
+    if (ok && S && S.online === O && !S.over) O.room.child('result').set({ type: 'resign', by: myUid() });
+  }
+  function offerDrawOnline() {
+    const O = S.online; if (!O || !O.live || S.over) return;
+    O.room.child('drawOffer').set(myUid()).then(() => Core.toast('Empate proposto')).catch(() => Core.toast('Erro ao propor empate'));
+  }
+  function cleanupOnline() {
+    const O = S && S.online; if (!O) return;
+    O.refs.forEach(([ref, ev, fn]) => { try { ref.off(ev, fn); } catch (e) { /* ok */ } });
+    O.refs = [];
+  }
+  async function leaveOnline(ask) {
+    const O = S.online; if (!O) return;
+    if (ask && O.live && !S.over) {
+      const ok = await Core.modal({ title: 'Sair da partida?', body: 'Sair agora conta como desistência.', buttons: [{ text: 'Continuar jogando', cls: 'ghost', value: false }, { text: 'Sair', cls: 'danger', value: true }] });
+      if (!ok || !S || S.online !== O) return;
+    }
+    const me = So().user && So().user.uid;
+    try {
+      if (O.live && !S.over && me) await O.room.child('result').set({ type: 'resign', by: me });
+      if (O.role === 'host' && (!O.live || S.over)) { await O.room.remove(); await So().db.ref('invites/' + O.oppUid + '/' + me).remove(); }
+    } catch (e) { console.error(e); }
+    cleanupOnline(); Core.store.set('chess.room', null);
+    const sv = S.aiSave; S.online = null;
+    if (sv) { S.game = sv.game; S.humanColor = sv.humanColor; S.over = sv.over; S.last = sv.last; S.lastResult = sv.lastResult; }
+    S.sel = null; S.targets = new Map(); S.hint = null;
+    S.board.setFlipped(S.humanColor === 1); S.board.setPosition(S.game.pos.b, null, false); S.board.setArrows([]);
+    refreshMarks(); updateBars(); updateStatus(); renderPanel();
+  }
+
+  Core.register('chess', { mount, unmount, joinRoom: inv => { if (S) { if (S.mode !== 'online') setMode('online'); joinRoom(inv); } } });
+
 })();
