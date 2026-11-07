@@ -128,7 +128,8 @@
     P.box.innerHTML = ''; P.ui = {};
     P.ui.pot = h('div', { class: 'p-pot' }, 'Pote: 0');
     P.ui.stage = h('div', { class: 'p-stage' });
-    P.ui.board = h('div', { class: 'p-board' });
+    P.ui.board = h('div', { class: 'p-board' }, [0, 1, 2, 3, 4].map(() => h('div', { class: 'card-slot' })));
+    P.ui.boardKeys = ['', '', '', '', ''];
     P.ui.felt = h('div', { class: 'p-felt' }, h('div', { class: 'p-mid' }, P.ui.stage, P.ui.board, P.ui.pot));
     P.ui.seats = P.players.map((p, i) => {
       const cards = h('div', { class: 'ps-cards' });
@@ -175,17 +176,33 @@
         p.hole.forEach(c => s.cards.append(Core.cardEl(c, { small: true, back: !p.reveal, cls: 'pc-s' })));
       }
     });
-    P.ui.board.innerHTML = '';
     for (let i = 0; i < 5; i++) {
       const c = P.board[i];
-      P.ui.board.append(c ? Core.cardEl(c, { cls: 'bd-c' + (P.winCards && P.winCards.has(c.r + c.s) ? ' win' : '') }) : h('div', { class: 'card-slot' }));
+      const base = c ? c.r + c.s : '';
+      const win = !!(c && P.winCards && P.winCards.has(base));
+      const key = base + (win ? '|w' : '');
+      if (P.ui.boardKeys[i] === key) continue;           // sem mudança: não recria (evita "pular")
+      const isNew = P.ui.boardKeys[i].split('|')[0] !== base;
+      const el = c ? Core.cardEl(c, { cls: (isNew ? 'bd-c' : '') + (win ? ' win' : '') }) : h('div', { class: 'card-slot' });
+      P.ui.board.replaceChild(el, P.ui.board.children[i]);
+      P.ui.boardKeys[i] = key;
     }
     P.ui.pot.textContent = 'Pote: ' + fmt(potTotal());
     P.ui.stage.textContent = P.stage || '';
     // mão do humano
     const me = P.players[0];
-    P.ui.hand.innerHTML = '';
-    me.hole.forEach(c => P.ui.hand.append(Core.cardEl(c, { cls: 'hole' + (me.folded ? ' dim' : '') + (P.winCards && P.winCards.has(c.r + c.s) ? ' win' : '') })));
+    const handBase = me.hole.map(c => c.r + c.s).join(',');
+    const handKey = handBase + '|' + (me.folded ? 'f' : '') + '|' + me.hole.map(c => (P.winCards && P.winCards.has(c.r + c.s)) ? 'w' : '-').join('');
+    if (P.ui.handKey !== handKey) {
+      const isNew = P.ui.handBase !== handBase;
+      P.ui.hand.innerHTML = '';
+      me.hole.forEach((c, i) => {
+        const el = Core.cardEl(c, { cls: 'hole' + (isNew ? ' deal' : '') + (me.folded ? ' dim' : '') + (P.winCards && P.winCards.has(c.r + c.s) ? ' win' : '') });
+        if (isNew) el.style.animationDelay = (i * 120) + 'ms';
+        P.ui.hand.append(el);
+      });
+      P.ui.handKey = handKey; P.ui.handBase = handBase;
+    }
   }
   const potTotal = () => P.players.reduce((a, p) => a + (p.total || 0), 0);
   function setAct(p, text, cls) { const s = P.ui.seats[p.id]; s.act.textContent = text || ''; s.act.className = 'ps-act ' + (cls || ''); }
