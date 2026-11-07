@@ -137,3 +137,28 @@ input[type=text] { width: 100%; background: rgba(0, 0, 0, .3); border: 1px solid
 @media (max-width: 480px) {
   .topbar h2 { font-size: 15px; }
 }
+
+/* ===== Social / online ===== */
+.hub-login { position: absolute; top: calc(14px + var(--safe-t)); right: 14px; z-index: 5; }
+.hub { position: relative; }
+.hub-login .btn { padding: 8px 14px; font-size: 14px; position: relative; }
+.badge { position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 12px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+.sheet-back { position: absolute; inset: 0; background: rgba(3, 5, 12, .72); backdrop-filter: blur(6px); display: flex; align-items: flex-end; justify-content: center; pointer-events: auto; animation: fadein .2s; }
+@media (min-width: 600px) { .sheet-back { align-items: center; padding: 16px; } }
+.sheet { width: min(520px, 100%); max-height: 88vh; overflow: auto; background: linear-gradient(180deg, #1a2342, #0f1630); border: 1px solid var(--line); border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + var(--safe-b)); box-shadow: var(--shadow); animation: popin .25s; }
+@media (min-width: 600px) { .sheet { border-radius: 22px; } }
+.sh-title { font-family: var(--font-title); color: var(--gold); font-size: 20px; letter-spacing: .04em; }
+.me-card { display: flex; gap: 12px; align-items: center; }
+.av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; background: rgba(255, 255, 255, .1); flex: none; border: 0; }
+.av.big { width: 58px; height: 58px; font-size: 32px; cursor: pointer; border: 2px solid var(--gold); }
+.av-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.code { letter-spacing: .15em; font-size: 15px; }
+.f-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); position: relative; }
+.f-row:last-child { border-bottom: 0; }
+.dot-st { position: absolute; left: 34px; top: 34px; width: 11px; height: 11px; border-radius: 50%; background: #6b7280; border: 2px solid #121a33; }
+.dot-st.on { background: #22c55e; }
+.bad { color: #fca5a5; } .good-t { color: #86efac; }
+#invite-root { position: fixed; top: calc(10px + var(--safe-t)); left: 0; right: 0; z-index: 130; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; padding: 0 10px; }
+.inv-banner { pointer-events: auto; display: flex; align-items: center; gap: 10px; width: min(460px, 100%); background: linear-gradient(180deg, #25305e, #151d3d); border: 1px solid rgba(233, 196, 106, .6); border-radius: 16px; padding: 10px 12px; box-shadow: var(--shadow); animation: popin .3s; font-size: 14px; }
+.olrow { display: flex; align-items: center; gap: 10px; }
+.chess-side .seg button { padding: 8px 6px; font-size: 13px; }
