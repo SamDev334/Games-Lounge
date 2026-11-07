@@ -152,8 +152,8 @@
 .dbtn { position: absolute; transform: translate(-50%, -50%); width: 21px; height: 21px; border-radius: 50%; background: #fff; color: #111; font-weight: 800; font-size: 12px; display: grid; place-items: center; z-index: 4; box-shadow: 0 2px 6px #0008; }
 .p-log { text-align: center; color: var(--muted); font-size: 13px; min-height: 18px; }
 .p-hand { display: flex; justify-content: center; gap: 10px; min-height: 108px; }
-.p-hand .card { --cw: 76px; animation: dealin .45s backwards; }
-.p-hand .card:nth-child(2) { animation-delay: .12s; }
+.p-hand .card { --cw: 76px; }
+.p-hand .card.deal { animation: dealin .45s backwards; }
 .p-info { text-align: center; font-size: 14px; color: #dbe4ff; min-height: 20px; }
 .p-ctl { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-height: 60px; }
 .p-ctl > .btn { align-self: center; }
