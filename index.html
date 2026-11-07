@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Salão dos Jogos · Xadrez, Truco, Poker e Gamão</title>
+<meta name="description" content="Pacote de jogos: Xadrez com IA e tutorial de aberturas, Truco Paulista, Poker Texas Hold'em e Gamão.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230b0f1a'/%3E%3Ctext x='50' y='72' font-size='64' text-anchor='middle' fill='%23e9c46a'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/chess.css">
+<link rel="stylesheet" href="css/cards.css">
+<link rel="stylesheet" href="css/gamao.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <radialGradient id="gW" cx="35%" cy="25%" r="85%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f1ebdd"/><stop offset="1" stop-color="#cfc5ad"/></radialGradient>
+    <radialGradient id="gB" cx="35%" cy="25%" r="85%"><stop offset="0" stop-color="#6b6b75"/><stop offset=".5" stop-color="#2d2d35"/><stop offset="1" stop-color="#101015"/></radialGradient>
+    <linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".45" stop-color="#e5b53c"/><stop offset="1" stop-color="#8a5f10"/></linearGradient>
+    <linearGradient id="gSilver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#b8c2d0"/><stop offset="1" stop-color="#6b7684"/></linearGradient>
+    <linearGradient id="gRuby" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9aa8"/><stop offset=".5" stop-color="#d1233f"/><stop offset="1" stop-color="#6b0b1d"/></linearGradient>
+    <linearGradient id="gSapph" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b6d4ff"/><stop offset=".5" stop-color="#3a74e0"/><stop offset="1" stop-color="#14306b"/></linearGradient>
+  </defs>
+</svg>
+
+<div id="bgfx" aria-hidden="true"></div>
+<main id="view"></main>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="js/core.js"></script>
+<script src="js/chess-engine.js"></script>
+<script src="js/chess-openings.js"></script>
+<script src="js/chess-ui.js"></script>
+<script src="js/truco.js"></script>
+<script src="js/poker.js"></script>
+<script src="js/gamao.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
