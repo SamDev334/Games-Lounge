@@ -214,7 +214,7 @@
   function mount(root) {
     const saved = Core.store.get('chess', {});
     S = {
-      root, mode: 'play', game: new E.Game(), level: saved.level != null ? saved.level : 3, humanColor: 0, colorPref: saved.color || 'w',
+      root, mode: 'play', tab: 'play', tc: saved.tc != null ? saved.tc : '0', clock: null, clkEls: {}, reportedT: null, game: new E.Game(), level: saved.level != null ? saved.level : 3, humanColor: 0, colorPref: saved.color || 'w',
       sel: null, targets: new Map(), over: false, thinking: false, token: 0, last: null, hint: null,
       style: Object.assign({ theme: 'walnut', pieces: 'classic', coords: true, legal: true, anim: true }, saved.style),
       tut: { op: null, step: 0, practice: false, side: 'w', fails: 0, correct: 0, tries: 0, auto: false, done: false },
@@ -239,31 +239,114 @@
 
     newGame(true);
     renderPanel();
-    if (Core.Social) S.unSocial = Core.Social.on(() => { if (S && S.mode === 'online') renderPanel(); });
+    S.clockIv = setInterval(clockTick, 100);
+    if (Core.Social) S.unSocial = Core.Social.on(() => { if (S && S.tab === 'online') renderPanel(); });
     if (Core.pendingRoom && Core.pendingRoom.game === 'chess') { const inv = Core.pendingRoom; Core.pendingRoom = null; setMode('online'); joinRoom(inv); }
   }
 
   function unmount() {
     if (S) {
-      S.token++; AI.cancel(); clearInterval(S.autoTimer);
+      S.token++; AI.cancel(); clearInterval(S.autoTimer); clearInterval(S.clockIv);
       if (S.unSocial) S.unSocial();
       if (S.online) cleanupOnline();
     }
     S = null;
   }
 
+  function syncTabs() { Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === S.tab)); }
   function setMode(k) {
-    if (S.mode === k) return;
-    if (S.online && k !== 'online' && k !== 'style') { Core.toast('Saia da partida online primeiro (botão Sair).'); return; }
+    // "Estilos" é só um painel: não muda o modo de jogo (o jogo continua jogável)
+    if (k === 'style') { S.tab = 'style'; syncTabs(); renderPanel(); return; }
+    if (S.mode === k) { if (S.tab !== k) { S.tab = k; syncTabs(); renderPanel(); } return; }
+    if (S.online && k !== 'online') { Core.toast('Saia da partida online primeiro (botão Sair).'); return; }
     S.token++; AI.cancel(); S.thinking = false; clearInterval(S.autoTimer); S.tut.auto = false;
-    S.mode = k;
-    Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === k));
+    S.mode = k; S.tab = k;
+    syncTabs();
     S.root.classList.toggle('mode-tut', k === 'tutorial');
     if (k === 'play') { restorePlayBoard(); }
     else if (k === 'tutorial') { if (S.tut.op) tutSetStep(S.tut.step, false, true); else { resetBoard(new E.Game()); } }
-    else if (k === 'style') { /* mantém o tabuleiro atual */ }
     else if (k === 'online') { if (!S.online) restorePlayBoard(); }
     renderPanel();
+  }
+
+  // ---------- relógio de xadrez ----------
+  const TCS = [
+    ['0', 'Sem tempo', 'livre'],
+    ['60+0', '1 min', 'Bullet'], ['60+1', '1 | 1', 'Bullet'],
+    ['180+0', '3 min', 'Blitz'], ['180+2', '3 | 2', 'Blitz'], ['300+0', '5 min', 'Blitz'], ['300+3', '5 | 3', 'Blitz'],
+    ['600+0', '10 min', 'Rápida'], ['600+5', '10 | 5', 'Rápida'], ['900+10', '15 | 10', 'Rápida'],
+    ['1200+0', '20 min', 'Clássica'], ['1800+0', '30 min', 'Clássica']
+  ];
+  const parseTc = k => { if (!k || k === '0') return null; const [b, i] = String(k).split('+').map(Number); return b > 0 ? { base: b, inc: i || 0 } : null; };
+  const tcLabel = tc => { if (!tc) return 'sem relógio'; const m = tc.base / 60; return tc.inc ? `${m} | ${tc.inc}` : `${m} min`; };
+  const makeClock = tc => (tc ? { tc, t: [tc.base * 1000, tc.base * 1000], last: Date.now() } : null);
+  function fmtClock(ms) {
+    ms = Math.max(0, ms); const s = ms / 1000;
+    if (s < 20) return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0');
+    const t = Math.ceil(s); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  }
+  function clockCounting() {
+    return !S.over && S.game.history.length >= 1 && ((S.mode === 'play' && !S.online) || (S.mode === 'online' && S.online && S.online.live));
+  }
+  function updateClockUI() {
+    const c = S && S.clock; if (!c || !S.clkEls) return;
+    const counting = clockCounting();
+    [0, 1].forEach(col => {
+      const el = S.clkEls[col]; if (!el || !el.isConnected) return;
+      el.textContent = fmtClock(c.t[col]);
+      el.classList.toggle('run', counting && S.game.pos.turn === col);
+      el.classList.toggle('low', c.t[col] < 30000);
+      el.classList.toggle('crit', c.t[col] < 10000);
+    });
+  }
+  function clockTick() {
+    const c = S && S.clock; if (!c) return;
+    const now = Date.now(), dt = now - c.last; c.last = now;
+    if (clockCounting()) {
+      const col = S.game.pos.turn;
+      c.t[col] = Math.max(0, c.t[col] - dt);
+      if (c.t[col] === 0) onFlag(col);
+    }
+    updateClockUI();
+  }
+  function hasMatingMaterial(color) {
+    let minors = 0; const b = S.game.pos.b;
+    for (let q = 0; q < 128; q++) {
+      if (q & 0x88) { q += 7; continue; }
+      const p = b[q]; if (!p || (p >> 3) !== color) continue;
+      const t = p & 7; if (t === 1 || t === 4 || t === 5) return true; if (t === 2 || t === 3) minors++;
+    }
+    return minors >= 2;
+  }
+  function onFlag(col) {
+    const O = S.online;
+    if (!O) {
+      if (S.over) return;
+      S.token++; AI.cancel(); S.thinking = false;
+      const winner = col ^ 1;
+      finish(hasMatingMaterial(winner) ? { over: true, kind: 'time', winner } : { over: true, kind: 'timemat', winner: -1 });
+      return;
+    }
+    const me = myUid();
+    if (col === O.myColor) { if (!O.sentTime) { O.sentTime = true; O.room.child('result').set({ type: 'time', by: me }); } }
+    else if (!O.flagAt) O.flagAt = Date.now();
+    else if (Date.now() - O.flagAt > 3500 && !O.sentTime) { O.sentTime = true; O.room.child('result').set({ type: 'time', by: O.oppUid }); }
+  }
+  /** chamado depois de cada lance (color = quem jogou; reported = tempo informado pelo jogador online) */
+  function clockMoved(color, reported) {
+    const c = S.clock; if (!c) return;
+    const n = S.game.history.length, now = Date.now();
+    if (reported != null) c.t[color] = reported;
+    else if (n >= 2) c.t[color] = Math.max(0, c.t[color] - (now - c.last)) + c.tc.inc * 1000;
+    c.last = now; updateClockUI();
+  }
+  function tcPicker() {
+    const wrap = h('div', { class: 'tc-grid' });
+    TCS.forEach(([k, big, cat]) => wrap.append(h('button', {
+      class: 'tc-item' + (S.tc === k ? ' active' : ''),
+      onclick: e => { S.tc = k; saveChess(); Core.$$('.tc-item', wrap).forEach(x => x.classList.remove('active')); e.currentTarget.classList.add('active'); }
+    }, h('b', null, big), h('span', null, cat))));
+    return wrap;
   }
 
   // ---------- jogo contra a IA ----------
@@ -274,6 +357,7 @@
     if (fromGame) { S.game = fromGame; S.humanColor = fromGame.humanColor; }
     else S.game = new E.Game();
     S.over = false; S.sel = null; S.targets = new Map(); S.last = null; S.hint = null;
+    S.clock = makeClock(parseTc(S.tc));
     const hl = S.game.history[S.game.history.length - 1];
     if (hl) S.last = [hl.from, hl.to];
     S.board.setFlipped(S.humanColor === 1);
@@ -352,6 +436,7 @@
   }
   function afterMove() {
     const g = S.game, hl = g.history[g.history.length - 1];
+    clockMoved(hl.color, S.reportedT); S.reportedT = null;
     S.last = [hl.from, hl.to]; S.hint = null;
     S.board.setPosition(g.pos.b, { from: hl.from, to: hl.to, flag: E.mFlag(hl.m), color: hl.color }, S.style.anim);
     const flag = E.mFlag(hl.m);
@@ -375,7 +460,11 @@
       const lv = LV[S.level];
       const legal = S.game.legal();
       if (lv.blunder && Math.random() < lv.blunder) { m = Core.pick(legal); await sleep(300); }
-      else m = await AI.think(S.game, { depth: lv.depth, time: lv.time, noise: lv.noise });
+      else {
+        let time = lv.time, depth = lv.depth;
+        if (S.clock) { const rem = S.clock.t[S.humanColor ^ 1]; time = Math.max(40, Math.min(time, rem / 30)); if (rem < 4000) depth = Math.min(depth, 2); }
+        m = await AI.think(S.game, { depth, time, noise: lv.noise });
+      }
     }
     if (tok !== S.token || !S || S.mode !== 'play') return;
     S.thinking = false;
@@ -389,11 +478,14 @@
     if (st.kind === 'mate') {
       if (st.winner === you) { title = 'Xeque-mate! Você venceu 🏆'; msg = S.online ? `Boa partida contra ${S.online.oppName}.` : 'Excelente partida contra o nível ' + LV[S.level].name + '.'; snd = 'win'; Core.addStat('chessWin'); }
       else { title = S.online ? `Xeque-mate. ${S.online.oppName} venceu` : 'Xeque-mate. A IA venceu'; msg = S.online ? 'Boa partida!' : 'Tente de novo ou diminua o nível para treinar.'; snd = 'lose'; }
+    } else if (st.kind === 'time') {
+      const win = st.winner === you;
+      title = win ? 'Vitória no tempo! ⏱' : 'Tempo esgotado ⏱'; msg = win ? (S.online ? `${S.online.oppName} ficou sem tempo.` : 'A IA ficou sem tempo.') : 'Seu tempo acabou.'; snd = win ? 'win' : 'lose'; if (win) Core.addStat('chessWin');
     } else if (st.kind === 'resign') {
       title = st.winner === you ? 'Vitória!' : 'Você desistiu'; msg = st.winner === you ? (S.online ? `${S.online.oppName} desistiu.` : 'A IA abandonou.') : 'Partida encerrada.'; snd = st.winner === you ? 'win' : 'lose';
     } else {
       title = 'Empate'; snd = 'draw';
-      msg = { stalemate: 'Rei afogado: o jogador da vez não tem lances legais.', material: 'Material insuficiente para dar mate.', fifty: 'Regra dos 50 lances sem captura ou lance de peão.', repetition: 'Tripla repetição de posição.', agreed: 'Empate por acordo.' }[st.kind] || '';
+      msg = { stalemate: 'Rei afogado: o jogador da vez não tem lances legais.', material: 'Material insuficiente para dar mate.', fifty: 'Regra dos 50 lances sem captura ou lance de peão.', repetition: 'Tripla repetição de posição.', agreed: 'Empate por acordo.', timemat: 'Tempo esgotado, mas o adversário não tem material para dar mate.' }[st.kind] || '';
     }
     S.over = true; S.lastResult = title; updateStatus();
     Core.snd(snd);
@@ -430,10 +522,12 @@
         h('div', { class: 'grow' },
           h('div', { class: 'nm' }, isYou ? (o && so && so.me ? so.me.name : Core.settings.name) : (o ? o.oppName : `IA · ${lv.name}`), (!isYou && S.thinking && !o) ? h('span', { class: 'dots' }, ' pensando') : null),
           h('div', { class: 'cap', html: capturedHtml(color) + (diff > 0 ? `<b class="adv">+${diff}</b>` : '') })),
-        h('div', { class: 'sub' }, isYou ? (color ? 'Pretas' : 'Brancas') : (o ? (o.oppOnline ? '🟢 online' : '⚪ offline') : `~${lv.elo} Elo`)));
+        h('div', { class: 'sub' }, isYou ? (color ? 'Pretas' : 'Brancas') : (o ? (o.oppOnline ? '🟢 online' : '⚪ offline') : `~${lv.elo} Elo`)),
+        S.clock ? (S.clkEls[color] = h('div', { class: 'clk' }, fmtClock(S.clock.t[color]))) : null);
       bar.classList.toggle('turn', S.game.pos.turn === color && !S.over);
     };
     fill(S.topBar, topColor); fill(S.botBar, bottomColor);
+    updateClockUI();
   }
   function updateStatus() {
     if (!S) return;
@@ -461,12 +555,12 @@
   // ---------- painéis ----------
   function renderPanel() {
     S.panel.innerHTML = '';
-    if (S.mode === 'play') panelPlay(); else if (S.mode === 'tutorial') panelTutorial(); else if (S.mode === 'online') panelOnline(); else panelStyle();
+    if (S.tab === 'style') panelStyle(); else if (S.mode === 'play') panelPlay(); else if (S.mode === 'tutorial') panelTutorial(); else panelOnline();
     S.topBar.classList.toggle('hide', S.mode === 'tutorial'); S.botBar.classList.toggle('hide', S.mode === 'tutorial');
     if (S.mode === 'play' || S.mode === 'online') { updateBars(); updateMoves(); }
     updateStatus();
   }
-  function saveChess() { Core.store.set('chess', { level: S.level, color: S.colorPref, style: S.style }); }
+  function saveChess() { Core.store.set('chess', { level: S.level, color: S.colorPref, style: S.style, tc: S.tc }); }
 
   function panelPlay() {
     const lv = LV[S.level];
@@ -478,6 +572,7 @@
       h('button', { class: S.colorPref === k ? 'active' : '', onclick: e => { S.colorPref = k; saveChess(); Core.$$('button', colorSeg).forEach(b => b.classList.remove('active')); e.currentTarget.classList.add('active'); } }, t)));
     S.movesEl = h('div', { class: 'moves' });
     S.panel.append(
+      h('div', { class: 'panel' }, h('h3', null, '⏱ Tempo de jogo'), tcPicker(), h('div', { class: 'small muted', style: { marginTop: '8px' } }, 'Vale a partir da próxima partida. Formato "5 | 3" = 5 minutos + 3 segundos por lance.')),
       h('div', { class: 'panel' }, h('h3', null, 'Partida'),
         lvLabel, slider, h('div', { class: 'row sb small muted', style: { marginTop: '4px' } }, h('span', null, 'Iniciante'), h('span', null, 'Máximo')),
         h('div', { style: { height: '12px' } }), colorSeg,
@@ -495,6 +590,7 @@
   }
   async function undo() {
     if (S.mode !== 'play' || !S.game.history.length) return;
+    if (S.clock) { Core.toast('Desfazer não está disponível em partidas com relógio'); return; }
     S.token++; AI.cancel(); S.thinking = false;
     S.over = false;
     S.game.undo();
@@ -725,8 +821,8 @@
     const T = S.tut, g = new E.Game();
     for (let i = 0; i < T.step; i++) g.play(g.parseSAN(T.op.moves[i][0]));
     g.humanColor = T.side === 'b' ? 1 : 0;
-    S.mode = 'play'; S.root.classList.remove('mode-tut');
-    Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === 'play'));
+    S.mode = 'play'; S.tab = 'play'; S.root.classList.remove('mode-tut');
+    syncTabs();
     newGame(false, g); renderPanel(); updateMoves();
   }
   function tutHint() {
@@ -795,7 +891,8 @@
     box.append(
       h('div', { class: 'olrow' }, h('div', { class: 'av' }, me.avatar), h('div', { class: 'grow' }, h('b', null, me.name), h('div', { class: 'small muted' }, 'Código: ', h('b', { class: 'gold' }, me.code))),
         h('button', { class: 'btn sm', onclick: () => so.openPanel({ invite: challenge }) }, '👥 Amigos' + ((so.requests.length) ? ` (${so.requests.length})` : ''))),
-      h('div', { style: { height: '10px' } }), h('div', { class: 'small muted', style: { marginBottom: '6px' } }, 'Suas peças ao desafiar:'), colorSeg);
+      h('div', { style: { height: '10px' } }), h('div', { class: 'small muted', style: { marginBottom: '6px' } }, 'Suas peças ao desafiar:'), colorSeg,
+      h('div', { class: 'small muted', style: { margin: '10px 0 6px' } }, 'Tempo de jogo:'), tcPicker());
     const saved = Core.store.get('chess.room', null);
     if (saved) box.append(h('div', { class: 'plan', style: { marginTop: '12px' } }, 'Você tem uma partida online em andamento. ',
       h('button', { class: 'btn sm primary', onclick: resumeRoom }, '↻ Retomar'), ' ', h('button', { class: 'btn sm ghost', onclick: () => { Core.store.set('chess.room', null); renderPanel(); } }, 'Descartar')));
@@ -813,7 +910,7 @@
     const O = S.online;
     O.statusEl = h('div', { class: 'small muted' });
     box.append(
-      h('div', { class: 'olrow' }, h('div', { class: 'av' }, O.oppAvatar), h('div', { class: 'grow' }, h('b', null, O.oppName), O.statusEl)),
+      h('div', { class: 'olrow' }, h('div', { class: 'av' }, O.oppAvatar), h('div', { class: 'grow' }, h('b', null, O.oppName), O.statusEl, h('div', { class: 'small muted' }, '⏱ ' + tcLabel(O.tc)))),
       h('div', { class: 'ctl-grid', style: { marginTop: '12px' } },
         h('button', { class: 'btn sm danger', onclick: resignOnline }, '🏳 Desistir'),
         h('button', { class: 'btn sm', onclick: offerDrawOnline }, '🤝 Empate'),
@@ -835,12 +932,13 @@
     if (!f.online) { Core.toast(f.name + ' está offline'); return; }
     const me = myUid(), db = so.db;
     const hostColor = S.onlineColor === 'b' ? 1 : S.onlineColor === 'w' ? 0 : Core.rand(0, 1);
+    const tc = parseTc(S.tc);
     const rid = db.ref('rooms').push().key;
     try {
-      await db.ref('rooms/' + rid).set({ game: 'chess', host: me, guest: f.uid, hostColor, hostName: so.me.name, hostAvatar: so.me.avatar, guestName: f.name, guestAvatar: f.avatar, created: so.TS, status: 'waiting' });
+      await db.ref('rooms/' + rid).set(Object.assign({ game: 'chess', host: me, guest: f.uid, hostColor, hostName: so.me.name, hostAvatar: so.me.avatar, guestName: f.name, guestAvatar: f.avatar, created: so.TS, status: 'waiting' }, tc ? { tc } : {}));
       await so.sendInvite(f.uid, 'chess', rid);
     } catch (e) { console.error(e); Core.toast('Não foi possível criar a partida (verifique as regras do banco).', 4000); return; }
-    startOnline({ rid, role: 'host', hostColor, oppUid: f.uid, oppName: f.name, oppAvatar: f.avatar });
+    startOnline({ rid, role: 'host', hostColor, oppUid: f.uid, oppName: f.name, oppAvatar: f.avatar, tc });
     Core.toast('Convite enviado para ' + f.name);
   }
   async function joinRoom(inv) {
@@ -852,7 +950,7 @@
       if (!snap.exists()) { Core.toast('Convite expirado'); return; }
       const r = snap.val();
       if (r.guest !== so.user.uid) { Core.toast('Convite inválido'); return; }
-      startOnline({ rid: inv.room, role: 'guest', hostColor: r.hostColor, oppUid: r.host, oppName: r.hostName || 'Amigo', oppAvatar: r.hostAvatar || '🙂' });
+      startOnline({ rid: inv.room, role: 'guest', hostColor: r.hostColor, oppUid: r.host, oppName: r.hostName || 'Amigo', oppAvatar: r.hostAvatar || '🙂', tc: r.tc || null });
     } catch (e) { console.error(e); Core.toast('Convite inválido ou expirado'); }
   }
   async function resumeRoom() {
@@ -861,18 +959,20 @@
       const snap = await so.db.ref('rooms/' + saved.rid).get();
       if (!snap.exists()) { Core.store.set('chess.room', null); Core.toast('A partida não existe mais'); renderPanel(); return; }
       const r = snap.val(), me = so.user.uid, host = r.host === me;
-      startOnline({ rid: saved.rid, role: host ? 'host' : 'guest', hostColor: r.hostColor, oppUid: host ? r.guest : r.host, oppName: (host ? r.guestName : r.hostName) || 'Amigo', oppAvatar: (host ? r.guestAvatar : r.hostAvatar) || '🙂' });
+      startOnline({ rid: saved.rid, role: host ? 'host' : 'guest', hostColor: r.hostColor, oppUid: host ? r.guest : r.host, oppName: (host ? r.guestName : r.hostName) || 'Amigo', oppAvatar: (host ? r.guestAvatar : r.hostAvatar) || '🙂', tc: r.tc || null });
     } catch (e) { Core.store.set('chess.room', null); Core.toast('Não foi possível retomar a partida'); renderPanel(); }
   }
 
   function startOnline(info) {
     const so = So(), db = so.db;
     S.token++; AI.cancel(); S.thinking = false;
-    S.aiSave = { game: S.game, humanColor: S.humanColor, over: S.over, last: S.last, lastResult: S.lastResult };
+    S.aiSave = { game: S.game, humanColor: S.humanColor, over: S.over, last: S.last, lastResult: S.lastResult, clock: S.clock };
     const myColor = info.role === 'host' ? info.hostColor : info.hostColor ^ 1;
-    const O = S.online = { rid: info.rid, role: info.role, myColor, oppUid: info.oppUid, oppName: info.oppName, oppAvatar: info.oppAvatar, live: false, oppOnline: false, refs: [], drawOffered: false };
+    const O = S.online = { rid: info.rid, role: info.role, myColor, oppUid: info.oppUid, oppName: info.oppName, oppAvatar: info.oppAvatar, live: false, oppOnline: false, refs: [], drawOffered: false, tc: info.tc || null };
+    S.clock = makeClock(info.tc || null);
     S.game = new E.Game(); S.humanColor = myColor; S.over = false; S.sel = null; S.targets = new Map(); S.last = null; S.hint = null; S.lastResult = '';
-    if (S.mode !== 'online') { S.mode = 'online'; Core.$$('button', S.tabs).forEach(b => b.classList.toggle('active', b.dataset.k === 'online')); S.root.classList.remove('mode-tut'); }
+    if (S.mode !== 'online') S.mode = 'online';
+    S.tab = 'online'; syncTabs(); S.root.classList.remove('mode-tut');
     S.board.setFlipped(myColor === 1); S.board.setPosition(S.game.pos.b, null, false); S.board.setArrows([]); refreshMarks();
     Core.store.set('chess.room', { rid: info.rid, role: info.role });
     const room = O.room = db.ref('rooms/' + info.rid);
@@ -881,7 +981,8 @@
     room.child('moves').get().then(snap => {
       if (!S || S.online !== O) return;
       const mv = snap.val() || {};
-      Object.keys(mv).map(Number).sort((a, b) => a - b).forEach(n => { if (n === S.game.history.length) S.game.play(mv[n].m); });
+      Object.keys(mv).map(Number).sort((a, b) => a - b).forEach(n => { if (n === S.game.history.length) { S.game.play(mv[n].m); if (S.clock && mv[n].t != null) S.clock.t[n % 2] = mv[n].t; } });
+      if (S.clock) S.clock.last = Date.now();
       syncBoardFromGame();
       on(room.child('moves'), 'child_added', s => applyRemote(+s.key, s.val()));
       on(room.child('moves'), 'child_removed', () => { if (!S.over) resync(); });
@@ -914,12 +1015,15 @@
     if (val.by !== expected) return;
     if (!g.play(val.m)) { Core.toast('Lance inválido recebido'); return; }
     S.sel = null; S.targets = new Map(); S.hint = null; S.board.setArrows([]);
+    S.reportedT = val.t != null ? val.t : null; O.flagAt = null;
     afterMove();
   }
   function sendMove(m) {
     const O = S.online, n = S.game.history.length;
     S.sel = null; S.targets = new Map(); S.hint = null; S.board.setArrows([]);
-    O.room.child('moves/' + n).set({ by: myUid(), m }).catch(e => { console.error(e); Core.toast('Falha ao enviar o lance'); });
+    const rec = { by: myUid(), m };
+    if (S.clock) { const c = S.clock, col = O.myColor; rec.t = Math.round(Math.max(0, c.t[col] - (Date.now() - c.last)) + (n >= 1 ? c.tc.inc * 1000 : 0)); }
+    O.room.child('moves/' + n).set(rec).catch(e => { console.error(e); Core.toast('Falha ao enviar o lance'); });
   }
   async function resync() {
     const O = S.online; if (!O) return;
@@ -933,6 +1037,7 @@
     const O = S && S.online; if (!O || S.over || !res) return;
     if (res.type === 'resign') finish({ over: true, kind: 'resign', winner: res.by === myUid() ? O.myColor ^ 1 : O.myColor });
     else if (res.type === 'draw') finish({ over: true, kind: 'agreed', winner: -1 });
+    else if (res.type === 'time') finish({ over: true, kind: 'time', winner: res.by === myUid() ? O.myColor ^ 1 : O.myColor });
   }
   function handleDraw(v) {
     const O = S && S.online; if (!O || S.over) return;
@@ -971,7 +1076,7 @@
     } catch (e) { console.error(e); }
     cleanupOnline(); Core.store.set('chess.room', null);
     const sv = S.aiSave; S.online = null;
-    if (sv) { S.game = sv.game; S.humanColor = sv.humanColor; S.over = sv.over; S.last = sv.last; S.lastResult = sv.lastResult; }
+    if (sv) { S.game = sv.game; S.humanColor = sv.humanColor; S.over = sv.over; S.last = sv.last; S.lastResult = sv.lastResult; S.clock = sv.clock || null; }
     S.sel = null; S.targets = new Map(); S.hint = null;
     S.board.setFlipped(S.humanColor === 1); S.board.setPosition(S.game.pos.b, null, false); S.board.setArrows([]);
     refreshMarks(); updateBars(); updateStatus(); renderPanel();
