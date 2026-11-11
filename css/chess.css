@@ -182,3 +182,15 @@
   .board-holder { width: min(100%, calc(100vh - 230px)) !important; }
   .cbar, .cstatus { max-width: none; width: min(100%, calc(100vh - 230px)); }
 }
+
+/* ===== Relógio e controle de tempo ===== */
+.clk { font-family: 'Outfit', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 22px; letter-spacing: .02em; padding: 4px 12px; border-radius: 10px; background: rgba(0, 0, 0, .45); border: 1px solid var(--line); color: #cfd6ea; min-width: 82px; text-align: center; flex: none; transition: background .2s, color .2s; }
+.clk.run { background: linear-gradient(180deg, #f6dc8e, var(--gold)); color: #2a1d02; border-color: #f3d98a; box-shadow: 0 0 14px rgba(233, 196, 106, .35); }
+.clk.low { color: #ffb86b; } .clk.run.low { background: linear-gradient(180deg, #ffc27a, #ff9a3c); color: #3a1c00; }
+.clk.crit { color: #ff8585; } .clk.run.crit { background: linear-gradient(180deg, #ff8d8d, #e04a4a); color: #fff; animation: blink 1s infinite; }
+.cbar .sub { margin-right: 4px; }
+.tc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tc-item { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 9px 4px; border-radius: 12px; border: 2px solid var(--line); background: rgba(0, 0, 0, .22); transition: border-color .2s, background .2s; }
+.tc-item b { font-size: 15px; } .tc-item span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.tc-item.active { border-color: var(--gold); background: rgba(233, 196, 106, .14); }
+@media (max-width: 480px) { .clk { font-size: 18px; min-width: 70px; padding: 3px 8px; } .cbar .sub { display: none; } }
