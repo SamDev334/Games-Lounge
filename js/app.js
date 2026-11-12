@@ -20,6 +20,9 @@
       <text x="110" y="68" text-anchor="middle" font-size="16" font-weight="800" fill="#e9c46a" font-family="Georgia,serif" letter-spacing="2">METRÓPOLE</text>
       <rect x="86" y="76" width="20" height="20" rx="4" fill="#fff"/><circle cx="96" cy="86" r="2.4" fill="#111"/><rect x="112" y="76" width="20" height="20" rx="4" fill="#fff"/><circle cx="118" cy="82" r="2.2" fill="#111"/><circle cx="126" cy="90" r="2.2" fill="#111"/>
       <text x="62" y="60" font-size="16">🚗</text><text x="146" y="48" font-size="16">🚀</text></svg>`,
+    detetive: `<svg viewBox="0 0 220 130"><rect x="40" y="46" width="140" height="74" rx="4" fill="#2a1f2e" stroke="#6b4f7a" stroke-width="2"/><polygon points="30,48 110,8 190,48" fill="#4a3358" stroke="#6b4f7a" stroke-width="2"/>
+      ${[0, 1, 2, 3].map(i => `<rect x="${54 + i * 32}" y="62" width="18" height="22" rx="2" fill="${i % 2 ? '#f3d03e' : '#1b1424'}"/>`).join('')}<rect x="98" y="92" width="24" height="28" rx="3" fill="#1b1424"/>
+      <circle cx="160" cy="88" r="22" fill="none" stroke="#e9c46a" stroke-width="6"/><line x1="176" y1="104" x2="200" y2="126" stroke="#e9c46a" stroke-width="8" stroke-linecap="round"/><text x="148" y="95" font-size="20" fill="#e9c46a" font-family="Georgia,serif" font-weight="700">?</text></svg>`,
     gamao: `<svg viewBox="0 0 220 130"><rect x="6" y="6" width="208" height="118" rx="8" fill="#5a3a22"/><rect x="12" y="12" width="196" height="106" rx="4" fill="#d9c49a"/>
       ${Array.from({ length: 10 }, (_, i) => `<path d="M${16 + i * 19} 12 l9.5 46 l9.5 -46z" fill="${i % 2 ? '#7a2e2e' : '#222'}"/><path d="M${16 + i * 19} 118 l9.5 -46 l9.5 46z" fill="${i % 2 ? '#222' : '#7a2e2e'}"/>`).join('')}
       ${[[35, 100], [35, 80], [92, 24], [92, 44], [148, 100], [148, 80], [148, 60]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="10" fill="${i < 2 || i > 3 ? '#f4efe3' : '#2a2a30'}" stroke="#0007" stroke-width="2"/>`).join('')}</svg>`
@@ -30,6 +33,7 @@
     { id: 'truco', title: 'Truco Paulista', desc: 'Jogue 1x1 ou em dupla com IAs de personalidades diferentes. Truco, seis, nove e doze!', tags: ['1x1', '2x2', 'Mão de onze'], bg: 'linear-gradient(135deg,#0f3b2a,#1f7a52 60%,#0a2418)' },
     { id: 'poker', title: 'Poker Texas Hold\'em', desc: 'Torneio de mesa com 6 jogadores. Adversários que blefam, calculam odds e mudam de estilo.', tags: ['6 jogadores', 'Blinds crescentes', 'Side pots'], bg: 'linear-gradient(135deg,#3b0f1c,#8a1f3a 60%,#220811)' },
     { id: 'metropole', title: 'Metrópole', desc: 'Compre bairros, negocie, construa e leve os rivais à falência neste jogo de investidores. De 2 a 6 jogadores.', tags: ['2–6 jogadores', 'Leilão e troca', 'Hipoteca'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
+    { id: 'detetive', title: 'Detetive', desc: 'Mistério na Mansão Blackwood: descubra quem, com o quê e onde. De 2 a 6 jogadores, contra IAs ou online.', tags: ['2–6 jogadores', 'Online', 'Dedução'], bg: 'linear-gradient(135deg,#2e1f3d,#6b3f8a 60%,#1a1024)' },
     { id: 'gamao', title: 'Gamão (Bukkagamon)', desc: 'O clássico jogo de dados e estratégia com regras completas e IA em 3 níveis.', tags: ['Backgammon', 'IA 3 níveis', 'Gammon'], bg: 'linear-gradient(135deg,#142a4a,#2c5b9c 60%,#0b1830)' }
   ];
 
@@ -46,7 +50,7 @@
       sw.checked = Core.settings.sound;
       const st = Core.stats;
       const stats = h('div', { class: 'small muted', html:
-        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b> · Metrópole: <b class="gold">${st.metropoleWin || 0}</b>` });
+        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b> · Metrópole: <b class="gold">${st.metropoleWin || 0}</b> · Detetive: <b class="gold">${st.detetiveWin || 0}</b>` });
 
       const So = Core.Social;
       const loginBtn = h('button', { class: 'btn', style: { position: 'relative' }, onclick: () => So && So.openPanel({}) });
@@ -63,7 +67,7 @@
         h('div', { class: 'row', style: { justifyContent: 'flex-end', minHeight: '38px' } }, loginBtn),
         h('div', { class: 'hub-head' },
           h('div', { class: 'logo' }, 'SALÃO DOS JOGOS'),
-          h('p', null, 'Xadrez · Truco · Poker · Gamão · Metrópole — tudo no seu navegador'),
+          h('p', null, 'Xadrez · Truco · Poker · Gamão · Metrópole · Detetive — tudo no seu navegador'),
           h('div', { class: 'suits' }, '♠ ♥ ♣ ♦')),
         grid,
         h('div', { class: 'settings-bar' },

@@ -5,7 +5,7 @@
   'use strict';
   const { h } = Core;
   const AVATARS = ['🙂', '😎', '🤠', '🧐', '🦊', '🦈', '🐆', '🦉', '🐼', '🐯', '🦁', '🐸', '🎩', '👑', '🤖', '👻', '🔥', '⭐', '🍀', '🎲'];
-  const GAMENAME = { chess: 'Xadrez', gamao: 'Gamão', poker: 'Poker', truco: 'Truco' };
+  const GAMENAME = { chess: 'Xadrez', gamao: 'Gamão', poker: 'Poker', truco: 'Truco', detetive: 'Detetive', metropole: 'Metrópole' };
 
   const S = { enabled: false, authReady: false, user: null, me: null, friends: new Map(), requests: [], invites: [], subs: new Set(), _w: {}, error: '' };
   Core.Social = S;
