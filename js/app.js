@@ -15,6 +15,11 @@
     poker: `<svg viewBox="0 0 220 130"><g transform="translate(40 18) rotate(-12)"><rect width="56" height="80" rx="8" fill="#fbf8ef" stroke="#c9bfa5" stroke-width="2"/><text x="8" y="26" font-size="22" font-weight="700" fill="#111" font-family="Georgia,serif">A</text><text x="28" y="60" font-size="34" text-anchor="middle" fill="#111">♠</text></g>
       <g transform="translate(86 14) rotate(8)"><rect width="56" height="80" rx="8" fill="#fbf8ef" stroke="#c9bfa5" stroke-width="2"/><text x="8" y="26" font-size="22" font-weight="700" fill="#c3202e" font-family="Georgia,serif">K</text><text x="28" y="60" font-size="34" text-anchor="middle" fill="#c3202e">♥</text></g>
       ${[['#d1233f', 150, 100], ['#2563eb', 175, 92], ['#16a34a', 160, 78]].map(([c, x, y]) => `<g transform="translate(${x} ${y})"><ellipse cx="0" cy="6" rx="24" ry="9" fill="#0006"/><ellipse cx="0" cy="0" rx="24" ry="9" fill="${c}" stroke="#fff" stroke-width="2" stroke-dasharray="6 6"/><ellipse cx="0" cy="-3" rx="24" ry="9" fill="${c}" stroke="#fff6" stroke-width="1.5"/></g>`).join('')}</svg>`,
+    metropole: `<svg viewBox="0 0 220 130"><rect x="30" y="6" width="160" height="118" rx="8" fill="#0d2231" stroke="#2a5a7a" stroke-width="3"/>
+      ${['#8b5a3c', '#6ec6ea', '#e66bb0', '#f29b3b', '#e04646', '#f3d03e', '#3fae5a', '#3a5fd6'].map((c, i) => `<rect x="${36 + i * 18}" y="12" width="16" height="24" fill="#ecf0e6" stroke="#2e4658"/><rect x="${36 + i * 18}" y="12" width="16" height="7" fill="${c}"/><rect x="${36 + i * 18}" y="94" width="16" height="24" fill="#ecf0e6" stroke="#2e4658"/><rect x="${36 + i * 18}" y="111" width="16" height="7" fill="${c}"/>`).join('')}
+      <text x="110" y="68" text-anchor="middle" font-size="16" font-weight="800" fill="#e9c46a" font-family="Georgia,serif" letter-spacing="2">METRÓPOLE</text>
+      <rect x="86" y="76" width="20" height="20" rx="4" fill="#fff"/><circle cx="96" cy="86" r="2.4" fill="#111"/><rect x="112" y="76" width="20" height="20" rx="4" fill="#fff"/><circle cx="118" cy="82" r="2.2" fill="#111"/><circle cx="126" cy="90" r="2.2" fill="#111"/>
+      <text x="62" y="60" font-size="16">🚗</text><text x="146" y="48" font-size="16">🚀</text></svg>`,
     gamao: `<svg viewBox="0 0 220 130"><rect x="6" y="6" width="208" height="118" rx="8" fill="#5a3a22"/><rect x="12" y="12" width="196" height="106" rx="4" fill="#d9c49a"/>
       ${Array.from({ length: 10 }, (_, i) => `<path d="M${16 + i * 19} 12 l9.5 46 l9.5 -46z" fill="${i % 2 ? '#7a2e2e' : '#222'}"/><path d="M${16 + i * 19} 118 l9.5 -46 l9.5 46z" fill="${i % 2 ? '#222' : '#7a2e2e'}"/>`).join('')}
       ${[[35, 100], [35, 80], [92, 24], [92, 44], [148, 100], [148, 80], [148, 60]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="10" fill="${i < 2 || i > 3 ? '#f4efe3' : '#2a2a30'}" stroke="#0007" stroke-width="2"/>`).join('')}</svg>`
@@ -24,6 +29,7 @@
     { id: 'chess', title: 'Xadrez', desc: 'IA com 8 níveis, tabuleiros e peças em vários estilos e tutorial das principais aberturas.', tags: ['IA 8 níveis', 'Tutorial', '9 temas'], bg: 'linear-gradient(135deg,#3b2a14,#7a5a2a 60%,#2a1c0b)' },
     { id: 'truco', title: 'Truco Paulista', desc: 'Jogue 1x1 ou em dupla com IAs de personalidades diferentes. Truco, seis, nove e doze!', tags: ['1x1', '2x2', 'Mão de onze'], bg: 'linear-gradient(135deg,#0f3b2a,#1f7a52 60%,#0a2418)' },
     { id: 'poker', title: 'Poker Texas Hold\'em', desc: 'Torneio de mesa com 6 jogadores. Adversários que blefam, calculam odds e mudam de estilo.', tags: ['6 jogadores', 'Blinds crescentes', 'Side pots'], bg: 'linear-gradient(135deg,#3b0f1c,#8a1f3a 60%,#220811)' },
+    { id: 'metropole', title: 'Metrópole', desc: 'Compre bairros, negocie, construa e leve os rivais à falência neste jogo de investidores. De 2 a 6 jogadores.', tags: ['2–6 jogadores', 'Leilão e troca', 'Hipoteca'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
     { id: 'gamao', title: 'Gamão (Bukkagamon)', desc: 'O clássico jogo de dados e estratégia com regras completas e IA em 3 níveis.', tags: ['Backgammon', 'IA 3 níveis', 'Gammon'], bg: 'linear-gradient(135deg,#142a4a,#2c5b9c 60%,#0b1830)' }
   ];
 
@@ -40,7 +46,7 @@
       sw.checked = Core.settings.sound;
       const st = Core.stats;
       const stats = h('div', { class: 'small muted', html:
-        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b>` });
+        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b> · Metrópole: <b class="gold">${st.metropoleWin || 0}</b>` });
 
       const So = Core.Social;
       const loginBtn = h('button', { class: 'btn', style: { position: 'relative' }, onclick: () => So && So.openPanel({}) });
@@ -57,7 +63,7 @@
         h('div', { class: 'row', style: { justifyContent: 'flex-end', minHeight: '38px' } }, loginBtn),
         h('div', { class: 'hub-head' },
           h('div', { class: 'logo' }, 'SALÃO DOS JOGOS'),
-          h('p', null, 'Xadrez · Truco · Poker · Gamão — tudo no seu navegador'),
+          h('p', null, 'Xadrez · Truco · Poker · Gamão · Metrópole — tudo no seu navegador'),
           h('div', { class: 'suits' }, '♠ ♥ ♣ ♦')),
         grid,
         h('div', { class: 'settings-bar' },
