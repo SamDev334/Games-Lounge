@@ -23,6 +23,8 @@
     detetive: `<svg viewBox="0 0 220 130"><rect x="40" y="46" width="140" height="74" rx="4" fill="#2a1f2e" stroke="#6b4f7a" stroke-width="2"/><polygon points="30,48 110,8 190,48" fill="#4a3358" stroke="#6b4f7a" stroke-width="2"/>
       ${[0, 1, 2, 3].map(i => `<rect x="${54 + i * 32}" y="62" width="18" height="22" rx="2" fill="${i % 2 ? '#f3d03e' : '#1b1424'}"/>`).join('')}<rect x="98" y="92" width="24" height="28" rx="3" fill="#1b1424"/>
       <circle cx="160" cy="88" r="22" fill="none" stroke="#e9c46a" stroke-width="6"/><line x1="176" y1="104" x2="200" y2="126" stroke="#e9c46a" stroke-width="8" stroke-linecap="round"/><text x="148" y="95" font-size="20" fill="#e9c46a" font-family="Georgia,serif" font-weight="700">?</text></svg>`,
+    perfil: `<svg viewBox="0 0 220 130"><g transform="translate(58 6) rotate(-6)"><rect width="104" height="118" rx="10" fill="#fbf8ef" stroke="#c9bfa5" stroke-width="3"/><circle cx="34" cy="36" r="15" fill="#6c8cff"/><path d="M10 82 q24 -36 48 0z" fill="#6c8cff"/><text x="80" y="46" font-size="44" text-anchor="middle" fill="#c3202e" font-family="Georgia,serif" font-weight="700">?</text>${[0, 1, 2, 3, 4].map(i => `<rect x="12" y="${90 + i * 5}" width="${80 - i * 9}" height="2.4" rx="1.2" fill="#b9ae93"/>`).join('')}</g><text x="168" y="30" font-size="22" font-weight="800" fill="#e9c46a" font-family="Georgia,serif">20</text><text x="170" y="112" font-size="16" font-weight="800" fill="#9fb0d8" font-family="Georgia,serif">1</text></svg>`,
+    darkstories: `<svg viewBox="0 0 220 130"><circle cx="110" cy="64" r="50" fill="#1b1230" stroke="#7a52c7" stroke-width="3"/><path d="M128 26 a42 42 0 1 0 0 76 a33 33 0 1 1 0 -76z" fill="#e9d8ff"/><circle cx="150" cy="58" r="3" fill="#c9a0ff"/><circle cx="166" cy="78" r="2" fill="#c9a0ff"/><circle cx="60" cy="30" r="2.4" fill="#c9a0ff"/><text x="106" y="84" font-size="50" font-weight="700" fill="#7a52c7" font-family="Georgia,serif" text-anchor="middle">?</text><path d="M30 118 q40 -22 80 0 t80 0" fill="none" stroke="#3b2a5c" stroke-width="3"/></svg>`,
     gamao: `<svg viewBox="0 0 220 130"><rect x="6" y="6" width="208" height="118" rx="8" fill="#5a3a22"/><rect x="12" y="12" width="196" height="106" rx="4" fill="#d9c49a"/>
       ${Array.from({ length: 10 }, (_, i) => `<path d="M${16 + i * 19} 12 l9.5 46 l9.5 -46z" fill="${i % 2 ? '#7a2e2e' : '#222'}"/><path d="M${16 + i * 19} 118 l9.5 -46 l9.5 46z" fill="${i % 2 ? '#222' : '#7a2e2e'}"/>`).join('')}
       ${[[35, 100], [35, 80], [92, 24], [92, 44], [148, 100], [148, 80], [148, 60]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="10" fill="${i < 2 || i > 3 ? '#f4efe3' : '#2a2a30'}" stroke="#0007" stroke-width="2"/>`).join('')}</svg>`
@@ -32,8 +34,10 @@
     { id: 'chess', title: 'Xadrez', desc: 'IA com 8 níveis, tabuleiros e peças em vários estilos e tutorial das principais aberturas.', tags: ['IA 8 níveis', 'Tutorial', '9 temas'], bg: 'linear-gradient(135deg,#3b2a14,#7a5a2a 60%,#2a1c0b)' },
     { id: 'truco', title: 'Truco Paulista', desc: 'Jogue 1x1 ou em dupla com IAs de personalidades diferentes. Truco, seis, nove e doze!', tags: ['1x1', '2x2', 'Mão de onze'], bg: 'linear-gradient(135deg,#0f3b2a,#1f7a52 60%,#0a2418)' },
     { id: 'poker', title: 'Poker Texas Hold\'em', desc: 'Torneio de mesa com 6 jogadores. Adversários que blefam, calculam odds e mudam de estilo.', tags: ['6 jogadores', 'Blinds crescentes', 'Side pots'], bg: 'linear-gradient(135deg,#3b0f1c,#8a1f3a 60%,#220811)' },
-    { id: 'metropole', title: 'Metrópole', desc: 'Compre bairros, negocie, construa e leve os rivais à falência neste jogo de investidores. De 2 a 6 jogadores.', tags: ['2–6 jogadores', 'Leilão e troca', 'Hipoteca'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
+    { id: 'metropole', title: 'Metrópole', desc: 'Estilo Banco Imobiliário: compre terrenos, construa casas e hotéis, negocie e leve os rivais à falência. De 2 a 6 jogadores.', tags: ['2–6 jogadores', 'Casas e hotéis', 'Negociação'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
     { id: 'detetive', title: 'Detetive', desc: 'Mistério na Mansão Blackwood: descubra quem, com o quê e onde. De 2 a 6 jogadores, contra IAs ou online.', tags: ['2–6 jogadores', 'Online', 'Dedução'], bg: 'linear-gradient(135deg,#2e1f3d,#6b3f8a 60%,#1a1024)' },
+    { id: 'perfil', title: 'Perfil', desc: '20 dicas, 20 pontos: descubra a pessoa, o lugar, a coisa ou o ano. Quanto antes acertar, mais pontos. Treino, IAs ou online.', tags: ['20 dicas', '4 categorias', 'Online'], bg: 'linear-gradient(135deg,#4a2a14,#c0702a 60%,#2d1809)' },
+    { id: 'darkstories', title: 'Dark Stories', desc: 'Enigmas sombrios resolvidos só com perguntas de Sim ou Não. Investigue sozinho ou com um amigo como narrador.', tags: ['Sim / Não', 'Narrador', 'Online'], bg: 'linear-gradient(135deg,#1a1230,#4b2f86 60%,#0e0a1c)' },
     { id: 'gamao', title: 'Gamão (Bukkagamon)', desc: 'O clássico jogo de dados e estratégia com regras completas e IA em 3 níveis.', tags: ['Backgammon', 'IA 3 níveis', 'Gammon'], bg: 'linear-gradient(135deg,#142a4a,#2c5b9c 60%,#0b1830)' }
   ];
 
@@ -50,7 +54,7 @@
       sw.checked = Core.settings.sound;
       const st = Core.stats;
       const stats = h('div', { class: 'small muted', html:
-        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b> · Metrópole: <b class="gold">${st.metropoleWin || 0}</b> · Detetive: <b class="gold">${st.detetiveWin || 0}</b>` });
+        `Vitórias — Xadrez: <b class="gold">${st.chessWin || 0}</b> · Truco: <b class="gold">${st.trucoWin || 0}</b> · Poker: <b class="gold">${st.pokerWin || 0}</b> · Gamão: <b class="gold">${st.gamaoWin || 0}</b> · Metrópole: <b class="gold">${st.metropoleWin || 0}</b> · Detetive: <b class="gold">${st.detetiveWin || 0}</b> · Perfil: <b class="gold">${st.perfilWin || 0}</b> · Dark Stories: <b class="gold">${st.darkWin || 0}</b>` });
 
       const So = Core.Social;
       const loginBtn = h('button', { class: 'btn', style: { position: 'relative' }, onclick: () => So && So.openPanel({}) });
@@ -67,7 +71,7 @@
         h('div', { class: 'row', style: { justifyContent: 'flex-end', minHeight: '38px' } }, loginBtn),
         h('div', { class: 'hub-head' },
           h('div', { class: 'logo' }, 'SALÃO DOS JOGOS'),
-          h('p', null, 'Xadrez · Truco · Poker · Gamão · Metrópole · Detetive — tudo no seu navegador'),
+          h('p', null, 'Xadrez · Truco · Poker · Gamão · Metrópole · Detetive · Perfil · Dark Stories — tudo no seu navegador'),
           h('div', { class: 'suits' }, '♠ ♥ ♣ ♦')),
         grid,
         h('div', { class: 'settings-bar' },

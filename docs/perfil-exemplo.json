@@ -1,0 +1,131 @@
+{
+  "cartas": [
+    {
+      "id": "santos-dumont",
+      "cat": "pessoa",
+      "answer": "Santos Dumont",
+      "aliases": [
+        "Santos Dumont",
+        "Alberto Santos Dumont",
+        "Dumont"
+      ],
+      "clues": [
+        "Nasci no século XIX, numa família de fazendeiros de café.",
+        "Meu pai era engenheiro e muito rico.",
+        "Nasci em Minas Gerais, mas cresci entre cafezais do interior paulista.",
+        "Ainda menino, eu já dirigia as máquinas a vapor e locomotivas da fazenda.",
+        "Eu devorava os livros de Júlio Verne.",
+        "Ainda jovem, mudei-me para a França.",
+        "Em Paris, virei celebridade da alta sociedade.",
+        "Meus colarinhos altos e chapéus viraram moda.",
+        "Comecei voando em balões; o primeiro se chamou \"Brasil\".",
+        "Depois criei dirigíveis, ou seja, balões com motor.",
+        "Em 1901, contornei uma famosa torre de ferro com um deles.",
+        "Com esse feito ganhei o Prêmio Deutsch e dividi o dinheiro com meus mecânicos e com os pobres de Paris.",
+        "Um amigo joalheiro fez para mim um relógio de pulso, para eu ver a hora durante o voo.",
+        "Minha máquina mais famosa era mais pesada que o ar e decolou sozinha.",
+        "O nome dela tem um número e a palavra \"bis\".",
+        "Ela voou em Paris, em outubro de 1906.",
+        "Muitos brasileiros me chamam de Pai da Aviação.",
+        "Um aeroporto do centro do Rio de Janeiro leva o meu nome.",
+        "Uma cidade de Minas Gerais tem o meu nome e sobrenome.",
+        "Sou o brasileiro do 14-Bis, e meu nome é Alberto..."
+      ]
+    },
+    {
+      "id": "cristo",
+      "cat": "lugar",
+      "answer": "Cristo Redentor",
+      "aliases": [
+        "Cristo Redentor",
+        "Cristo",
+        "Cristo do Corcovado",
+        "Redentor"
+      ],
+      "clues": [
+        "Fico num país tropical de dimensões continentais.",
+        "Fico no alto de uma montanha, no meio de uma grande cidade.",
+        "De longe, sou visto de várias praias.",
+        "Estou cercado por uma floresta dentro da cidade: a Floresta da Tijuca.",
+        "Dá para subir até mim de trem.",
+        "Fui inaugurado em 1931.",
+        "Sou feito de concreto armado, revestido de pequenos mosaicos de pedra-sabão.",
+        "Fui projetado por um engenheiro brasileiro e um escultor francês.",
+        "Meu estilo é Art Déco.",
+        "Tenho cerca de 30 metros de altura, sem contar o pedestal.",
+        "Minha envergadura, de uma ponta a outra, é de 28 metros.",
+        "Costumo ser atingido por raios.",
+        "Estou sempre de braços abertos.",
+        "Em 2007, fui eleito uma das Sete Maravilhas do Mundo Moderno.",
+        "Fico no morro do Corcovado.",
+        "Represento uma figura religiosa cristã.",
+        "Meu nome lembra Jesus.",
+        "Sou o maior cartão-postal do Rio de Janeiro.",
+        "Abro os braços sobre a Baía de Guanabara e o Pão de Açúcar.",
+        "Sou uma estátua gigante chamada Cristo ..."
+      ]
+    },
+    {
+      "id": "bussola",
+      "cat": "coisa",
+      "answer": "Bússola",
+      "aliases": [
+        "Bússola",
+        "Bussola",
+        "Bússola magnética"
+      ],
+      "clues": [
+        "Sou um objeto pequeno, que cabe na palma da mão.",
+        "Não preciso de pilha nem de energia elétrica.",
+        "Meus ancestrais eram feitos de uma pedra magnética chamada magnetita.",
+        "Surgi na China, há mais de mil anos.",
+        "No começo, ajudava até a orientar a construção de casas e cidades.",
+        "Os navegadores me usaram para atravessar oceanos.",
+        "Sou importante em dias de névoa, quando não se vê o sol nem as estrelas.",
+        "Tenho um mostrador com letras como N, S, L e O.",
+        "Dentro de mim há uma agulha imantada que gira livremente.",
+        "Ela se alinha com o campo magnético da Terra.",
+        "Ela aponta para o norte magnético, e não exatamente para o geográfico.",
+        "Escoteiros e exploradores me carregam em trilhas.",
+        "Os celulares modernos têm uma versão eletrônica minha.",
+        "Ajudo você a se orientar.",
+        "Minha agulha aponta sempre para o mesmo lado.",
+        "Funciono graças ao magnetismo.",
+        "Mostro onde fica o norte.",
+        "Sou um instrumento de orientação com agulha magnética.",
+        "Meu nome termina com A e começa com B.",
+        "Sou a ... (instrumento que aponta para o norte)."
+      ]
+    },
+    {
+      "id": "ano-1969",
+      "cat": "ano",
+      "answer": "1969",
+      "aliases": [
+        "1969"
+      ],
+      "clues": [
+        "Neste ano, o mundo vivia a Guerra Fria.",
+        "Os Estados Unidos estavam em guerra no Vietnã.",
+        "O Brasil vivia sob um regime militar.",
+        "Um avião supersônico de passageiros fez seu primeiro voo: o Concorde.",
+        "Os Beatles deram seu último show, no telhado de um prédio em Londres.",
+        "No fim de junho, protestos no bar Stonewall, em Nova York, marcaram a luta LGBT.",
+        "Em julho, três astronautas partiram de Cabo Canaveral numa nave Apollo.",
+        "Quatro dias depois, dois deles pisaram na Lua.",
+        "O comandante era Neil Armstrong.",
+        "Ele disse: \"Um pequeno passo para o homem, um salto gigante para a humanidade.\"",
+        "Cerca de 600 milhões de pessoas assistiram pela TV.",
+        "Em agosto, um festival reuniu cerca de 400 mil pessoas numa fazenda de Nova York: Woodstock.",
+        "Em outubro, a primeira mensagem entre dois computadores foi enviada na ARPANET, a \"avó\" da internet.",
+        "Em novembro, Pelé marcou seu milésimo gol, no Maracanã.",
+        "Foi o ano em que o ser humano pisou na Lua.",
+        "Foi o último ano da década de 1960.",
+        "Um ano depois, o Brasil seria tricampeão mundial de futebol no México.",
+        "Sou o ano da missão Apollo 11.",
+        "Começo com mil novecentos e sessenta e ...",
+        "Sou o ano da chegada à Lua."
+      ]
+    }
+  ]
+}
