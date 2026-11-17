@@ -71,12 +71,12 @@
   }
 
   const PERSONAS = [
-    { name: 'Tubarão', emoji: '🦈', tight: .65, aggr: .75, bluff: .15, desc: 'Tight-agressivo' },
-    { name: 'Raposa', emoji: '🦊', tight: .3, aggr: .7, bluff: .55, desc: 'Blefadora' },
-    { name: 'Rocha', emoji: '🪨', tight: .85, aggr: .2, bluff: .03, desc: 'Passivo e sólido' },
-    { name: 'Pantera', emoji: '🐆', tight: .45, aggr: .9, bluff: .3, desc: 'Agressiva' },
-    { name: 'Coruja', emoji: '🦉', tight: .6, aggr: .45, bluff: .1, desc: 'Calculista' },
-    { name: 'Maluco', emoji: '🤪', tight: .1, aggr: .85, bluff: .7, desc: 'Imprevisível' }
+    { name: 'Tubarão', emoji: '🦈', tight: .62, aggr: .72, bluff: .2, trap: .3, desc: 'Tight-agressivo' },
+    { name: 'Raposa', emoji: '🦊', tight: .32, aggr: .7, bluff: .5, trap: .2, desc: 'Blefadora' },
+    { name: 'Rocha', emoji: '🪨', tight: .82, aggr: .3, bluff: .05, trap: .5, desc: 'Sólido e paciente' },
+    { name: 'Pantera', emoji: '🐆', tight: .42, aggr: .85, bluff: .32, trap: .1, desc: 'Agressiva' },
+    { name: 'Coruja', emoji: '🦉', tight: .6, aggr: .5, bluff: .14, trap: .4, desc: 'Calculista' },
+    { name: 'Maluco', emoji: '🤪', tight: .15, aggr: .8, bluff: .55, trap: .15, desc: 'Imprevisível' }
   ];
   const BLINDS = [[10, 20], [15, 30], [25, 50], [50, 100], [75, 150], [100, 200], [150, 300], [200, 400], [300, 600], [500, 1000]];
   const HANDS_PER_LEVEL = 5;
@@ -95,11 +95,6 @@
   function unmount() {
     if (P) { if (P.lobby) P.lobby.destroy(); cleanupOnline(); P.tok = {}; }
     P = null;
-  }
-
-  function showRanks() {
-    const rows = [['Royal / Straight Flush', 'Sequência do mesmo naipe'], ['Quadra', '4 cartas iguais'], ['Full House', 'Trinca + par'], ['Flush', '5 cartas do mesmo naipe'], ['Sequência', '5 cartas seguidas'], ['Trinca', '3 cartas iguais'], ['Dois Pares', ''], ['Par', ''], ['Carta Alta', '']];
-    Core.modal({ title: 'Ranking das mãos', body: h('div', { class: 'ranks' }, rows.map(([a, b], i) => h('div', { class: 'rk' }, h('b', null, (i + 1) + '. ' + a), h('span', null, b)))), buttons: [{ text: 'Fechar', cls: 'primary', value: 1 }] });
   }
 
   function showSetup() {
@@ -210,6 +205,7 @@
       });
       P.ui.handKey = handKey; P.ui.handBase = handBase;
     }
+    updateInfo();
     pubSchedule();
   }
   const potTotal = () => P.players.reduce((a, p) => a + (p.total || 0), 0);
@@ -277,6 +273,9 @@
     if (lvl > 0 && (P.handNo - 1) % HANDS_PER_LEVEL === 0) { Core.toast(`Blinds aumentaram: ${fmt(SB)}/${fmt(BB)}`, 2600); }
     // baralho
     P.deck = shuffle(mkDeck());
+    if (P.handNo === 1) P.stats = {};
+    P.hand = { pre: {}, st: {}, raisesPre: 0, raisesStreet: 0, pfr: -1 }; P.sbI = sbI; P.bbI = bbI; P.heads = heads;
+    P.players.forEach(q => { q.mood = (Math.random() - .5) * .6; });
     const postBlind = (p, amt) => { const a = Math.min(amt, p.chips); p.chips -= a; p.bet += a; p.total += a; if (p.chips === 0) p.allIn = true; };
     postBlind(P.players[sbI], SB); postBlind(P.players[bbI], BB);
     setAct(P.players[sbI], 'SB ' + fmt(SB), 'blind'); setAct(P.players[bbI], 'BB ' + fmt(BB), 'blind');
@@ -293,6 +292,7 @@
       const [name, n] = streets[si];
       if (si > 0) {
         P.players.forEach(p => { p.bet = 0; if (!p.folded && !p.out && !p.allIn) setAct(p, ''); else if (!p.allIn) { /* mantém fold */ } });
+        P.hand.st = {}; P.hand.raisesStreet = 0;
         for (let k = 0; k < n; k++) P.board.push(P.deck.pop());
         P.stage = name; Core.snd('card'); renderAll();
         await wait(700);
@@ -339,6 +339,13 @@
 
   function applyAction(p, act, S) {
     const toCall = S.currentBet - p.bet;
+    if (P.hand) {
+      if (toCall > 0) { const sx = stat(p.id); sx.face++; if (act.type === 'fold') sx.fold++; }
+      if (act.type === 'raise') {
+        if (P.board.length === 0) { P.hand.pre[p.id] = (P.hand.pre[p.id] || 0) + 1; P.hand.raisesPre++; P.hand.pfr = p.id; }
+        else { P.hand.st[p.id] = (P.hand.st[p.id] || 0) + 1; P.hand.raisesStreet++; P.hand.bets = P.hand.bets || {}; P.hand.bets[p.id] = (P.hand.bets[p.id] || 0) + 1; }
+      }
+    }
     if (act.type === 'fold') { p.folded = true; setAct(p, 'Fold', 'fold'); log(`${p.name} desistiu.`); Core.snd('card'); }
     else if (act.type === 'call') {
       const a = Math.min(toCall, p.chips);
@@ -357,6 +364,7 @@
       setAct(p, p.allIn ? 'All-in ' + fmt(to) : (wasBet ? 'Aposta ' : 'Raise ') + fmt(to), p.allIn ? 'allin' : 'raise');
       log(`${p.name} ${p.allIn ? 'vai all-in com' : (wasBet ? 'aposta' : 'aumenta para')} ${fmt(to)}.`); Core.snd('chip');
     }
+    if (window.__pk) window.__pk(p, act, toCall, P.board.length, S);   // gancho de telemetria (apenas testes)
     renderAll();
   }
 
@@ -378,13 +386,6 @@
     const { toCall, callAmt, minTo, maxTo, canRaise, pot, cur } = info;
     let raiseTo = minTo;
     const ctl = P.ui.ctl; ctl.innerHTML = '';
-    if (P.showEq) {
-      const nOpp = inHand().length - 1;
-      const eq = equity(p.hole, P.board, nOpp, 400);
-      const extra = P.board.length >= 3 ? ' · ' + describe(evalCards(p.hole.concat(P.board))) : '';
-      P.ui.info.innerHTML = `🎯 Chance de vitória: <b>${Math.round(eq * 100)}%</b>${extra}`;
-    } else if (P.board.length >= 3) P.ui.info.innerHTML = '✋ ' + describe(evalCards(p.hole.concat(P.board)));
-    else P.ui.info.innerHTML = '';
     const label = h('div', { class: 'rz-label' });
     const unit = Math.max(1, Math.floor((P.SB || 10) / 2));
     const slider = h('input', { type: 'range', min: minTo, max: maxTo, value: minTo, step: 1 });
@@ -412,44 +413,267 @@
     ctl.append(btns);
   }
 
-  // ---------------- IA ----------------
-  async function aiTurn(p, S) {
-    const st = p.style;
-    log(`${p.name} está pensando…`);
-    await wait(700 + rand(0, 900));
-    const toCall = S.currentBet - p.bet;
-    const nOpp = inHand().length - 1;
-    const sims = Math.round(160 * P.skill) + 40;
-    let eq = equity(p.hole, P.board, nOpp, sims);
-    eq += (Math.random() - .5) * 0.12 / P.skill;
-    const pot = potTotal();
-    const n = nOpp + 1, fair = 1 / n;
-    const potOdds = toCall / (pot + toCall || 1);
-    const maxTo = p.bet + p.chips, minTo = Math.min(maxTo, S.currentBet === 0 ? P.BB : S.currentBet + S.minRaise);
-    const unit = Math.max(1, Math.floor(P.SB / 2));
-    const raiseTo = f => Math.min(maxTo, Math.max(minTo, Math.round((S.currentBet + f * (pot + toCall)) / unit) * unit));
-    const strong = fair + .22 + st.tight * .1;
-    const monster = fair + .38 + st.tight * .08;
-    const preflop = P.board.length === 0;
-    const stackRatio = toCall / Math.max(1, p.chips + p.bet);   // quanto do stack custa pagar
-    if (toCall === 0) {
-      if (eq >= monster && Math.random() < .6 + st.aggr * .35) return { type: 'raise', to: raiseTo(.5 + Math.random() * .5) };
-      if (eq >= strong && Math.random() < .35 + st.aggr * .5) return { type: 'raise', to: raiseTo(.4 + Math.random() * .3) };
-      if (Math.random() < st.bluff * .16 && P.board.length < 5) return { type: 'raise', to: raiseTo(.45) };
-      return { type: 'call' };
+  // ======================= IA DE POKER =======================
+  // Ideias: (1) equidade contra o RANGE provável de cada adversário (quem aposta/aumenta tem mão mais forte),
+  // (2) posição na mesa, (3) tamanhos de aposta variados, (4) blefe/semi-blefe calibrados por quem costuma desistir,
+  // (5) push/fold com pilha curta, (6) sem all-in à toa e sem "fold automático".
+  const unitOf = () => Math.max(1, Math.floor(P.SB / 2));
+  const stat = id => { P.stats = P.stats || {}; return (P.stats[id] = P.stats[id] || { face: 0, fold: 0 }); };
+  const foldRate = id => { const s = stat(id); return (s.fold + 2) / (s.face + 6); };
+  const avgFold = opps => (opps.length ? opps.reduce((a, o) => a + foldRate(o.id), 0) / opps.length : .35);
+
+  /** fórmula de Chen: força inicial (≈ -1 a 20) */
+  function chen(hole) {
+    const s2 = hole.slice().sort((x, y) => y.v - x.v), a = s2[0], b = s2[1];
+    const pts = v => (v === 14 ? 10 : v === 13 ? 8 : v === 12 ? 7 : v === 11 ? 6 : v / 2);
+    let s = pts(a.v);
+    if (a.v === b.v) return Math.max(5, Math.ceil(s * 2));
+    if (a.s === b.s) s += 2;
+    const gap = a.v - b.v - 1;
+    s -= gap <= 0 ? 0 : gap === 1 ? 1 : gap === 2 ? 2 : gap === 3 ? 4 : 5;
+    if (gap <= 1 && a.v < 12) s += 1;
+    return Math.ceil(s);
+  }
+  function posOf(p) {
+    if (p.id === P.bbI) return 'BB';
+    if (p.id === P.sbI && !P.heads) return 'SB';
+    if (p.id === P.button) return 'BTN';
+    let i = p.id, steps = 0;
+    while (i !== P.button && steps < 7) { i = nextActive(i); steps++; }
+    return steps === 1 ? 'CO' : steps === 2 ? 'MP' : 'EP';
+  }
+  /** "k" = quantas mãos o adversário sorteia antes de escolher a melhor (quanto maior, mais forte o range) */
+  function oppK(q) {
+    const hd = P.hand; let k = 1;
+    if (P.board.length === 0) {
+      const pr = hd.pre[q.id] || 0; k += .7 * pr;
+      if (!pr && q.bet > P.BB * 1.01) k += .35;            // pagou um raise
+      if (q.allIn && q.bet > P.BB * 6) k += .6;
+    } else {
+      const st = hd.st[q.id] || 0;
+      k += .4 * Math.min(1, hd.pre[q.id] || 0) + .8 * st;
+      if (q.bet > 0) k += Math.min(.8, q.bet / Math.max(1, potTotal() - q.bet) * .7);
     }
-    if (p.chips <= toCall) { // call é all-in
-      if (eq >= potOdds + .02 + st.tight * .05 || Math.random() < st.bluff * .05) return { type: 'call' };
+    return Math.min(4.4, k);
+  }
+  /** equidade contra ranges ponderados (Monte Carlo) */
+  function rangeEquity(hole, opps, sims) {
+    const board = P.board, known = new Set(hole.concat(board).map(enc));
+    const base = mkDeck().filter(c => !known.has(enc(c))), need = 5 - board.length, pre = board.length === 0;
+    let win = 0, tie = 0;
+    for (let i = 0; i < sims; i++) {
+      const pool = base.slice();
+      const take = () => { const j = Math.floor(Math.random() * pool.length), c = pool[j]; pool[j] = pool[pool.length - 1]; pool.pop(); return c; };
+      const oh = [];
+      for (const o of opps) {
+        const kk = Math.max(1, Math.floor(o.k) + (Math.random() < o.k % 1 ? 1 : 0));
+        let best = null, bs = -1; const tries = [];
+        for (let t = 0; t < kk; t++) {
+          const a = take(), b = take();
+          const sc = pre ? chen([a, b]) + Math.random() * .6 : evalCards([a, b].concat(board));
+          tries.push([a, b]); if (sc > bs) { bs = sc; best = [a, b]; }
+        }
+        tries.forEach(pr => { if (pr !== undefined && best[0] !== pr[0]) pool.push(pr[0], pr[1]); });
+        oh.push(best);
+      }
+      const run = []; for (let r = 0; r < need; r++) run.push(take());
+      const full = board.concat(run), my = evalCards(hole.concat(full));
+      let lost = false, ties = 0;
+      for (const [a, b] of oh) { const sc = evalCards([a, b].concat(full)); if (sc > my) { lost = true; break; } if (sc === my) ties++; }
+      if (!lost) { if (!ties) win++; else tie += 1 / (ties + 1); }
+    }
+    return (win + tie) / sims;
+  }
+  /** projetos: flush (9 outs) e sequência (aberta ≈ 8, buraco ≈ 4) */
+  function drawInfo(hole, board) {
+    const out = { flush: false, oesd: false, gut: false, outs: 0 };
+    if (board.length < 3 || board.length > 4) return out;
+    const all = hole.concat(board);
+    if ((evalCards(all) >> 20) >= 4) return out;
+    const bySuit = {}; all.forEach(c => { bySuit[c.s] = (bySuit[c.s] || 0) + 1; });
+    for (const s in bySuit) if (bySuit[s] === 4 && hole.some(c => c.s === s)) out.flush = true;
+    let mask = 0, hm = 0; all.forEach(c => { mask |= 1 << c.v; }); hole.forEach(c => { hm |= 1 << c.v; });
+    const low = m => ((m & (1 << 14)) ? m | 2 : m), HM = low(hm); let ranks = 0;
+    for (let r = 2; r <= 14; r++) {
+      if (mask & (1 << r)) continue;
+      const M2 = low(mask | (1 << r)); let ok = false;
+      for (let hi = 14; hi >= 5 && !ok; hi--) { const w = 0x1F << (hi - 4); if ((M2 & w) === w && (HM & w)) ok = true; }
+      if (ok) ranks++;
+    }
+    if (ranks >= 2) out.oesd = true; else if (ranks === 1) out.gut = true;
+    out.outs = (out.flush ? 9 : 0) + ranks * 4;
+    return out;
+  }
+  function ctxFor(p, S) {
+    const toCall = S.currentBet - p.bet, maxTo = p.bet + p.chips, pot = potTotal();
+    const opps = inHand().filter(q => q.id !== p.id).map(q => ({ id: q.id, k: oppK(q) }));
+    return {
+      toCall, pot, potOdds: toCall / (pot + toCall || 1), maxTo, unit: unitOf(), canRaise: p.chips > toCall,
+      minTo: Math.min(maxTo, S.currentBet === 0 ? P.BB : S.currentBet + S.minRaise),
+      stackBB: (p.chips + p.bet) / P.BB, spr: p.chips / Math.max(1, pot), n: inHand().length, opps, pos: posOf(p), street: P.board.length
+    };
+  }
+  /** raise por fração do pote (all-in só se a aposta já compromete a maior parte da pilha) */
+  function mkRaise(p, S, c, frac) {
+    let to = Math.round((S.currentBet + frac * (c.pot + c.toCall)) / c.unit) * c.unit;
+    to = Math.max(c.minTo, Math.min(c.maxTo, to));
+    if (to >= c.maxTo * .62 || c.maxTo - to <= S.minRaise) to = c.maxTo;
+    return { type: 'raise', to };
+  }
+  function raiseAbs(p, S, c, to) {
+    to = Math.round(to / c.unit) * c.unit; to = Math.max(c.minTo, Math.min(c.maxTo, to));
+    if (to >= c.maxTo * .55 || c.maxTo - to <= S.minRaise) to = c.maxTo;
+    return { type: 'raise', to };
+  }
+
+  function aiPreflop(p, S, c) {
+    const st = p.style, hole = p.hole, sc = chen(hole), bb = P.BB, rnd = Math.random();
+    const pair = hole[0].v === hole[1].v, suited = hole[0].s === hole[1].s;
+    const hi = Math.max(hole[0].v, hole[1].v), lo = Math.min(hole[0].v, hole[1].v), conn = Math.abs(hole[0].v - hole[1].v) <= 2;
+    const raises = P.hand.raisesPre, late = c.pos === 'BTN' || c.pos === 'CO', free = c.toCall === 0;
+    const tAdj = (st.tight - .5) * 3 + (p.mood || 0) * 2, pAdj = { EP: 1.2, MP: .5, CO: -.7, BTN: -1.7, SB: -.5, BB: -.8 }[c.pos] || 0;
+    const spec = pair || (suited && (hi === 14 || (conn && lo >= 4))) || (suited && hi >= 11 && lo >= 9);
+    const prem = sc >= 12 || (pair && hi >= 11);
+    const limpers = P.players.filter(q => !q.out && !q.folded && q.id !== p.id && q.id !== P.bbI && q.id !== P.sbI && q.bet >= bb && q.bet <= bb).length;
+    const sims = Math.round(110 * P.skill) + 40;
+    // ---- pilha curta (≤ 12 BB): empurra ou desiste ----
+    if (c.stackBB <= 12) {
+      const thr = 4.2 + c.stackBB * .5 + (st.tight - .5) * 2.4 - (late ? 1.4 : 0);
+      if (raises === 0) {
+        if (sc >= thr || (late && rnd < st.bluff * .1)) return raiseAbs(p, S, c, c.maxTo);
+        return free ? { type: 'call' } : (sc >= thr - 1.5 && c.toCall <= bb && rnd < .5 ? { type: 'call' } : { type: 'fold' });
+      }
+      return rangeEquity(hole, c.opps, sims) >= c.potOdds + .03 ? { type: 'call' } : { type: 'fold' };
+    }
+    // ---- ninguém aumentou ainda ----
+    if (raises === 0) {
+      const openThr = 6.8 + tAdj + pAdj;
+      if (sc >= openThr || prem) {
+        if (!prem && !free && rnd < (1 - st.aggr) * .3) return { type: 'call' };                         // limp passivo
+        return raiseAbs(p, S, c, Math.max(bb * (2.2 + Math.random() * .8) + limpers * bb, c.minTo));
+      }
+      if (late && limpers === 0 && sc >= 3 && rnd < st.bluff * .5 + .1) return raiseAbs(p, S, c, bb * (2.1 + Math.random() * .6));   // roubo de blinds
+      if (free) return { type: 'call' };
+      if (spec && c.toCall <= bb && rnd < .75) return { type: 'call' };
+      if (c.pos === 'SB' && sc >= 4 && rnd < .55) return { type: 'call' };
+      if (c.toCall <= bb && sc >= 6 && rnd < .45 + (1 - st.tight) * .3) return { type: 'call' };
       return { type: 'fold' };
     }
-    let need = potOdds + .03 + st.tight * .06 + stackRatio * .18;
-    if (preflop) need += .02;
-    if (eq >= monster && Math.random() < .5 + st.aggr * .45) return { type: 'raise', to: raiseTo(.75 + Math.random() * .6) };
-    if (eq >= strong + .04 && Math.random() < st.aggr * .55) return { type: 'raise', to: raiseTo(.6) };
-    if (Math.random() < st.bluff * .06 && toCall < p.chips * .3) return { type: 'raise', to: raiseTo(.9) };
-    if (eq >= need) return { type: 'call' };
-    if (Math.random() < st.bluff * .08 && stackRatio < .1) return { type: 'call' };
+    // ---- enfrentando aumento(s) ----
+    const eq = rangeEquity(hole, c.opps, sims), cost = c.toCall / Math.max(1, p.chips + p.bet), need = c.potOdds;
+    if (prem && c.canRaise) {
+      if (raises >= 3) return (pair && hi >= 13) || sc >= 16 ? raiseAbs(p, S, c, c.maxTo) : { type: 'call' };
+      if (raises === 1 && rnd < .12 + (1 - st.aggr) * .25) return { type: 'call' };                          // flat / disfarce
+      return raiseAbs(p, S, c, S.currentBet * (raises === 1 ? (late ? 3 : 3.5) : 2.3));
+    }
+    if (c.canRaise && raises === 1 && late && eq >= need + .1 && rnd < st.aggr * .22) return raiseAbs(p, S, c, S.currentBet * 3);
+    if (c.canRaise && raises === 1 && late && suited && (hi === 14 || conn) && rnd < st.bluff * .2) return raiseAbs(p, S, c, S.currentBet * 3);   // 3-bet blefe
+    if (eq >= need + .08 && cost <= .35) return { type: 'call' };
+    if (spec && cost <= .09 && rnd < .8) return { type: 'call' };                                            // odds implícitas
+    if (c.pos === 'BB' && raises === 1 && c.toCall <= bb * 3.3 && eq >= need * .88 && sc >= 3) return { type: 'call' };   // defende o BB
+    if (eq >= need + .02 && cost <= .2 && sc >= 5) return { type: 'call' };
     return { type: 'fold' };
+  }
+
+  function aiPostflop(p, S, c) {
+    const st = p.style, street = c.street, hd = P.hand, rnd = Math.random();
+    const sims = Math.round(130 * P.skill) + 50;
+    const eq = rangeEquity(p.hole, c.opps, sims) + (Math.random() - .5) * .08 / Math.max(.6, P.skill) + (p.mood || 0) * .05;
+    const dr = drawInfo(p.hole, P.board), multi = c.n - 1, wasAgg = hd.pfr === p.id, fr = avgFold(c.opps);
+    const toCall = c.toCall, pot = c.pot, valueThr = .56 + .045 * (multi - 1), strongThr = .8;
+    // ---- posso apostar (ninguém apostou) ----
+    if (toCall === 0) {
+      if (!c.canRaise) return { type: 'call' };
+      if (eq >= strongThr) {
+        if (street < 5 && c.spr > 1.5 && multi <= 2 && rnd < st.trap * .6) return { type: 'call' };            // armadilha (check)
+        return mkRaise(p, S, c, .55 + Math.random() * .35);
+      }
+      if (eq >= valueThr) return rnd < .5 + st.aggr * .45 ? mkRaise(p, S, c, .35 + Math.random() * .25) : { type: 'call' };
+      if (dr.outs >= 8 && street < 5 && rnd < .25 + st.aggr * .4) return mkRaise(p, S, c, .45 + Math.random() * .2);   // semi-blefe
+      if (wasAgg && street === 3 && multi <= 2 && rnd < .35 + st.aggr * .3) return mkRaise(p, S, c, .33 + Math.random() * .12); // aposta de continuação
+      const barrels = (hd.bets && hd.bets[p.id]) || 0;                               // já apostei em ruas anteriores?
+      const flushBoard = ['C', 'H', 'S', 'D'].some(su => P.board.filter(x => x.s === su).length >= 3);
+      const blocker = flushBoard && p.hole.some(x => x.v >= 11 && P.board.filter(y => y.s === x.s).length >= 3);
+      let bluffP = st.bluff * (.5 + fr) * (multi === 1 ? 1 : .3) * (street === 5 ? .9 : 1);
+      if (barrels > 0 && street >= 4) bluffP *= 1.5;                                  // continuar a história
+      if (blocker) bluffP *= 1.8;
+      if (barrels === 0 && street === 5 && wasAgg === false) bluffP *= .5;           // blefe do nada no river é raro
+      if (eq < .4 && rnd < bluffP) return mkRaise(p, S, c, [.5, .66, .75][Math.floor(Math.random() * 3)]);       // blefe puro (mesma história do valor)
+      return { type: 'call' };
+    }
+    // ---- enfrentando aposta ----
+    const need = c.potOdds, betFrac = toCall / Math.max(1, pot - toCall), cap = hd.raisesStreet >= 2;
+    if (eq >= .85 && c.canRaise && !cap) return (street < 5 && rnd < st.trap * .3) ? { type: 'call' } : mkRaise(p, S, c, .75 + Math.random() * .5);
+    if (eq >= need + .12 && c.canRaise && !cap && rnd < st.aggr * .35 && c.spr > 1.3) return mkRaise(p, S, c, .6);
+    if (dr.outs >= 9 && street < 5 && c.canRaise && !cap && rnd < st.aggr * .28 && c.spr > 1.5 && eq < .55) return mkRaise(p, S, c, .7);
+    if (c.canRaise && !cap && c.n === 2 && rnd < st.bluff * .06 && eq < .3 && betFrac < .6) return mkRaise(p, S, c, .8);
+    const margin = .01 + st.tight * .03, imp = (dr.outs >= 8 && street < 5) ? .035 : 0;
+    if (eq >= need + margin - imp) return { type: 'call' };
+    if (betFrac <= .5 && eq >= need * .72 && rnd < .35 + (1 - st.tight) * .3) return { type: 'call' };           // curiosidade / blefe-catch leve
+    if (dr.outs >= 8 && street < 5 && toCall <= p.chips * .12 && rnd < .5) return { type: 'call' };
+    return { type: 'fold' };
+  }
+
+  async function aiTurn(p, S) {
+    log(`${p.name} está pensando…`);
+    await wait(650 + rand(0, 950));
+    const c = ctxFor(p, S);
+    let act = P.board.length === 0 ? aiPreflop(p, S, c) : aiPostflop(p, S, c);
+    if (P.skill < 1 && Math.random() < .1) act = c.toCall === 0 ? { type: 'call' } : (Math.random() < .5 ? { type: 'call' } : { type: 'fold' });   // erros no nível fácil
+    if (act.type === 'raise' && !c.canRaise) act = { type: 'call' };
+    if (act.type === 'fold' && c.toCall === 0) act = { type: 'call' };
+    if (act.type === 'raise') act.to = Math.max(c.minTo, Math.min(c.maxTo, act.to));
+    return act;
+  }
+
+  // ---------- informação da mão do jogador (aparece na hora) ----------
+  function describeHole(h2) {
+    const [a, b] = h2.slice().sort((x, y) => y.v - x.v);
+    if (a.v === b.v) return 'Par de ' + PL[a.v];
+    return 'Carta alta (' + SG[a.v] + ')' + (a.s === b.s ? ' · mesmo naipe' : '');
+  }
+  function updateInfo() {
+    if (!P || !P.ui || !P.ui.info) return;
+    const me = P.players && P.players[0];
+    if (!me || !me.hole || me.hole.length < 2 || me.out || !me.hole[0].r) { P.ui.info.innerHTML = ''; return; }
+    if (me.folded) { P.ui.info.innerHTML = '🂠 Você desistiu desta mão.'; return; }
+    const made = P.board.length >= 3 ? describe(evalCards(me.hole.concat(P.board))) : describeHole(me.hole);
+    let extra = '';
+    const dr = drawInfo(me.hole, P.board);
+    if (dr.flush) extra += ' · projeto de flush';
+    if (dr.oesd) extra += ' · sequência aberta'; else if (dr.gut) extra += ' · sequência de buraco';
+    let eqTxt = '';
+    if (P.showEq) {
+      const nOpp = Math.max(1, inHand().length - 1), key = me.hole.map(enc).join() + '|' + P.board.map(enc).join() + '|' + nOpp;
+      if (P.ui.eqKey !== key) { P.ui.eqKey = key; P.ui.eqVal = equity(me.hole, P.board, nOpp, 350); }
+      eqTxt = `🎯 Chance de vitória: <b>${Math.round(P.ui.eqVal * 100)}%</b><br>`;
+    }
+    P.ui.info.innerHTML = eqTxt + '✋ <b>' + made + '</b>' + extra;
+  }
+
+  // ---------- ranking das mãos (igual à imagem de referência) ----------
+  function showRanks() {
+    const C = (r, s) => ({ r, s, v: RV[r] });
+    const rows = [
+      ['ROYAL FLUSH', [C('T', 'S'), C('J', 'S'), C('Q', 'S'), C('K', 'S'), C('A', 'S')], [0, 1, 2, 3, 4]],
+      ['STRAIGHT FLUSH', [C('5', 'C'), C('6', 'C'), C('7', 'C'), C('8', 'C'), C('9', 'C')], [0, 1, 2, 3, 4]],
+      ['QUADRA', [C('A', 'D'), C('A', 'C'), C('A', 'H'), C('A', 'S'), C('K', 'S')], [0, 1, 2, 3]],
+      ['FULL HOUSE', [C('K', 'C'), C('K', 'H'), C('K', 'S'), C('4', 'S'), C('4', 'D')], [0, 1, 2, 3, 4]],
+      ['FLUSH', [C('Q', 'C'), C('9', 'C'), C('6', 'C'), C('4', 'C'), C('2', 'C')], [0, 1, 2, 3, 4]],
+      ['SEQUÊNCIA', [C('2', 'D'), C('3', 'C'), C('4', 'S'), C('5', 'D'), C('6', 'C')], [0, 1, 2, 3, 4]],
+      ['TRINCA', [C('J', 'D'), C('J', 'C'), C('J', 'S'), C('9', 'D'), C('5', 'C')], [0, 1, 2]],
+      ['DOIS PARES', [C('9', 'C'), C('9', 'S'), C('4', 'H'), C('4', 'D'), C('2', 'S')], [0, 1, 2, 3]],
+      ['UM PAR', [C('A', 'H'), C('A', 'C'), C('9', 'D'), C('6', 'S'), C('3', 'C')], [0, 1]],
+      ['CARTA ALTA', [C('K', 'C'), C('J', 'H'), C('8', 'D'), C('5', 'S'), C('2', 'C')], [0]]
+    ];
+    const body = h('div', { class: 'rk-wrap' },
+      h('div', { class: 'rk-title' }, 'CLASSIFICAÇÃO DE', h('br'), 'MÃOS DE POKER'),
+      h('div', { class: 'rk-side' }, h('div', { class: 'rk-lab' }, h('i', null, '▲'), h('span', null, 'MELHOR')), h('div', { class: 'rk-lab' }, h('span', null, 'PIOR'), h('i', null, '▼'))),
+      h('div', { class: 'rk-rows' }, rows.map(([name, cards, hi], i) => h('div', { class: 'rk-row' },
+        h('i', { class: 'rk-n' }, i + 1),
+        h('div', { class: 'rk-cards' }, cards.map((c, k) => Core.cardEl(c, { small: true, cls: hi.includes(k) ? '' : 'faded' }))),
+        h('b', { class: 'rk-name' }, name)))));
+    Core.modal({ title: '', body, buttons: [{ text: 'Fechar', cls: 'primary', value: 1 }] });
   }
 
   // ---------------- showdown / potes ----------------
@@ -691,7 +915,6 @@
       if (O.shownAsk !== a.id) {
         O.shownAsk = a.id;
         Core.snd('turn');
-        P.ui.info.innerHTML = P.board.length >= 3 ? '✋ ' + describe(evalCards(P.players[0].hole.concat(P.board))) : '';
         buildControls(P.players[0], { toCall: a.toCall, callAmt: a.callAmt, minTo: a.minTo, maxTo: a.maxTo, canRaise: a.canRaise, pot: a.pot, cur: a.cur }, act => {
           P.ui.ctl.innerHTML = '';
           const rec = { id: a.id, type: act.type }; if (act.type === 'raise') rec.to = act.to;
@@ -734,7 +957,8 @@
     showSetup();
   }
 
-  window.PokerEval = { evalCards, describe, equity, mkDeck };
+  window.PokerEval = { evalCards, describe, equity, mkDeck, chen, describeHole, drawInfo };
+  window.PokerDebug = { state: () => P };
   Core.register('poker', { mount, unmount, joinRoom: inv => { if (P) joinPoker(inv); } });
 
 })();

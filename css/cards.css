@@ -160,3 +160,18 @@
 .p-btns .btn { min-width: 0; padding: 14px 8px; font-size: 16px; }
 .ranks { display: grid; gap: 6px; } .ranks .rk { display: flex; flex-direction: column; padding: 8px 10px; background: rgba(0, 0, 0, .25); border-radius: 10px; } .ranks .rk span { font-size: 12.5px; color: var(--muted); }
 @media (min-width: 700px) { .p-table { aspect-ratio: 1.55; max-height: 60vh; } .p-board .card, .card-slot { --cw: 58px; width: 58px; height: 82px; } }
+
+/* ===== Ranking das mãos (igual à referência) ===== */
+.rk-wrap { background: linear-gradient(180deg, #e3141c, #a50d15); border-radius: 16px; padding: 12px 10px 14px; display: grid; grid-template-columns: 22px 1fr; gap: 8px 6px; box-shadow: inset 0 0 30px rgba(0, 0, 0, .25); }
+.rk-title { grid-column: 1 / 3; text-align: center; font-weight: 800; font-size: 19px; line-height: 1.1; color: #fff; letter-spacing: .01em; padding: 2px 0 6px; text-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+.rk-side { display: flex; flex-direction: column; justify-content: space-between; align-items: center; color: #fff; font-weight: 800; font-size: 10px; letter-spacing: .14em; padding: 2px 0; }
+.rk-lab { display: flex; flex-direction: column; align-items: center; gap: 5px; } .rk-lab i { font-style: normal; font-size: 11px; }
+.rk-side span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+.rk-rows { display: flex; flex-direction: column; gap: 7px; }
+.rk-row { display: grid; grid-template-columns: 20px auto 1fr; gap: 8px; align-items: center; }
+.rk-n { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #c4121a; font-style: normal; font-weight: 800; font-size: 11px; display: grid; place-items: center; }
+.rk-cards { display: flex; gap: 3px; }
+.rk-cards .card.small { --cw: 34px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0, 0, 0, .35); }
+.rk-cards .card.faded { opacity: .36; }
+.rk-name { color: #fff; font-weight: 800; font-size: 11.5px; letter-spacing: .02em; line-height: 1.1; }
+.p-info { min-height: 42px; line-height: 1.45; }
