@@ -39,7 +39,7 @@
         const rid = await so.createRoom(o.game, friends, extra);
         Object.assign(S, { role: 'host', rid, room: so.db.ref('rooms/' + rid), hostUid: so.user.uid, left: false });
         showWait(true);
-      } catch (e) { console.error(e); Core.toast('Não foi possível criar a sala (verifique as regras do banco).', 4000); }
+      } catch (e) { console.error(e); Core.toast('Não foi possível criar a sala: ' + (e.message || 'verifique as regras do banco.'), 5000); }
     }
     S.join = async function (inv) {
       const so = So();
@@ -49,7 +49,7 @@
         Object.assign(S, { role: 'guest', rid: inv.room, room: so.db.ref('rooms/' + inv.room), hostUid: room.host, left: false });
         Core.store.set(o.key, { rid: inv.room });
         showWait(false);
-      } catch (e) { console.error(e); Core.toast('Convite inválido ou expirado'); }
+      } catch (e) { console.error(e); Core.toast(e.message || 'Convite inválido ou expirado', 5000); o.onLeft && o.onLeft(); }
     };
     async function resume() {
       const saved = Core.store.get(o.key, null), so = So(); if (!saved || !so.user) return;
@@ -98,13 +98,19 @@
         S.refs.push([ref, 'value', fn]);
       });
       S.started = true;
-      await S.publishNow(pub);
+      const okPub = await S.publishNow(pub, true);
+      if (!okPub) { Core.toast('Não foi possível iniciar: o banco recusou a gravação (publique as regras de database.rules.json no Firebase).', 7000); return false; }
       await S.room.child('status').set('playing');
+      return true;
     };
-    S.publishNow = function (pub) {
-      if (S.role !== 'host' || !S.room) return Promise.resolve();
+    S.publishNow = function (pub, strict) {
+      if (S.role !== 'host' || !S.room) return Promise.resolve(false);
       clearTimeout(S.pt); S.pt = null; S.pending = null;
-      return S.room.child('pub').set(JSON.parse(JSON.stringify(Object.assign({}, pub, { seq: ++S.seq })))).catch(e => console.error(e));
+      return S.room.child('pub').set(JSON.parse(JSON.stringify(Object.assign({}, pub, { seq: ++S.seq })))).then(() => true).catch(e => {
+        console.error(e);
+        if (!strict && !S.warned) { S.warned = true; Core.toast('Falha ao sincronizar com os amigos: ' + (e.message || e), 5000); }
+        return false;
+      });
     };
     /** publicação com pequeno atraso (agrupa várias mudanças seguidas); recebe uma função que gera o estado */
     S.publish = function (getPub) {
@@ -126,7 +132,9 @@
     }
     S.send = function (act) {
       if (S.role !== 'guest' || !S.room || !So().user) return Promise.resolve();
-      return S.room.child('act/' + So().user.uid).set(Object.assign({ id: Date.now() * 10 + (S.n++ % 10) }, act)).catch(e => console.error(e));
+      return S.room.child('act/' + So().user.uid).set(Object.assign({ id: Date.now() * 10 + (S.n++ % 10) }, act)).catch(e => {
+        console.error(e); Core.toast(/permission/i.test(e.message || '') ? 'O banco recusou sua jogada: peça ao anfitrião para publicar as regras (database.rules.json) no Firebase.' : 'Falha ao enviar a jogada.', 6000);
+      });
     };
 
     // ---------- encerramento ----------

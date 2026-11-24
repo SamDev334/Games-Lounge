@@ -25,6 +25,9 @@ PEÇAS ESSENCIAIS DA SOLUÇÃO (uma explicação só vence se cobrir todas elas,
 GABARITO DE REFERÊNCIA (exemplos de pergunta → resposta correta; use para calibrar, mas qualquer outra pergunta deve ser julgada pela história secreta):
 {{GABARITO}}
 
+FICHA DO CASO (respostas corretas para temas comuns; use-as quando a pergunta tratar deles):
+{{FICHA}}
+
 DICAS (use SOMENTE quando o jogador digitar exatamente /dica, na ordem, uma por vez):
 {{DICAS}}
 
@@ -76,10 +79,12 @@ Aguarde o comando /iniciar para começar.`;
   function build(story) {
     const gab = story.qa.filter(q => ANS[q[1]]).map(q => `- "${q[0]}" → ${ANS[q[1]]}`).join('\n');
     const pecas = story.facts.map((f, i) => `${i + 1}. ${f.t}`).join('\n');
+    const TU = root.TextUtil;
+    const ficha = TU && story.attrs ? TU.GENERIC.filter(g => ANS[story.attrs[g[0]] || 'i']).map(g => `- ${g[1]} → ${ANS[story.attrs[g[0]] || 'i']}`).join('\n') : '- (sem ficha)';
     const dicas = story.hints.map((d, i) => `${i + 1}) ${d}`).join('\n');
     return TEMPLATE
       .replace('{{TITULO}}', story.title).replace('{{ENIGMA}}', story.story).replace('{{HISTORIA}}', story.solution)
-      .replace('{{PECAS}}', pecas).replace('{{GABARITO}}', gab).replace('{{DICAS}}', dicas);
+      .replace('{{FICHA}}', ficha).replace('{{PECAS}}', pecas).replace('{{GABARITO}}', gab).replace('{{DICAS}}', dicas);
   }
 
   const api = { TEMPLATE, build };

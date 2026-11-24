@@ -31,10 +31,10 @@
   };
 
   const CARDS = [
-    { id: 'chess', title: 'Xadrez', desc: 'IA com 8 níveis, tabuleiros e peças em vários estilos e tutorial das principais aberturas.', tags: ['IA 8 níveis', 'Tutorial', '9 temas'], bg: 'linear-gradient(135deg,#3b2a14,#7a5a2a 60%,#2a1c0b)' },
+    { id: 'chess', title: 'Xadrez', desc: 'IA com 8 níveis, treinador que analisa e explica cada lance seu, tutorial de aberturas, relógio e 9 temas de tabuleiro.', tags: ['IA 8 níveis', 'Treinador', 'Online'], bg: 'linear-gradient(135deg,#3b2a14,#7a5a2a 60%,#2a1c0b)' },
     { id: 'truco', title: 'Truco Paulista', desc: 'Jogue 1x1 ou em dupla com IAs de personalidades diferentes. Truco, seis, nove e doze!', tags: ['1x1', '2x2', 'Mão de onze'], bg: 'linear-gradient(135deg,#0f3b2a,#1f7a52 60%,#0a2418)' },
     { id: 'poker', title: 'Poker Texas Hold\'em', desc: 'Torneio de mesa com 6 jogadores. Adversários que blefam, calculam odds e mudam de estilo.', tags: ['6 jogadores', 'Blinds crescentes', 'Side pots'], bg: 'linear-gradient(135deg,#3b0f1c,#8a1f3a 60%,#220811)' },
-    { id: 'metropole', title: 'Metrópole', desc: 'Estilo Banco Imobiliário: compre terrenos, construa casas e hotéis, negocie e leve os rivais à falência. De 2 a 6 jogadores.', tags: ['2–6 jogadores', 'Casas e hotéis', 'Negociação'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
+    { id: 'metropole', title: 'Metrópole', desc: 'Estilo Banco Imobiliário em 3D: compre terrenos, construa casas e hotéis, negocie e leve os rivais à falência. De 2 a 6 jogadores.', tags: ['Tabuleiro 3D', 'Casas e hotéis', 'Negociação'], bg: 'linear-gradient(135deg,#123a4a,#1f7a8c 60%,#0a2430)' },
     { id: 'detetive', title: 'Detetive', desc: 'Mistério na Mansão Blackwood: descubra quem, com o quê e onde. De 2 a 6 jogadores, contra IAs ou online.', tags: ['2–6 jogadores', 'Online', 'Dedução'], bg: 'linear-gradient(135deg,#2e1f3d,#6b3f8a 60%,#1a1024)' },
     { id: 'perfil', title: 'Perfil', desc: '20 dicas, 20 pontos: descubra a pessoa, o lugar, a coisa ou o ano. Quanto antes acertar, mais pontos. Treino, IAs ou online.', tags: ['20 dicas', '4 categorias', 'Online'], bg: 'linear-gradient(135deg,#4a2a14,#c0702a 60%,#2d1809)' },
     { id: 'darkstories', title: 'Dark Stories', desc: 'Enigmas sombrios resolvidos só com perguntas de Sim ou Não. Investigue sozinho ou com um amigo como narrador.', tags: ['Sim / Não', 'Narrador', 'Online'], bg: 'linear-gradient(135deg,#1a1230,#4b2f86 60%,#0e0a1c)' },
@@ -78,7 +78,7 @@
           h('div', { class: 'panel' }, h('h3', null, 'Jogador'), nameInput),
           h('div', { class: 'panel' }, h('h3', null, 'Som'), h('div', { class: 'row sb' }, h('span', null, 'Efeitos sonoros'), h('label', { class: 'switch' }, sw, h('i')))),
           h('div', { class: 'panel' }, h('h3', null, 'Placar'), stats)),
-        h('div', { class: 'footer' }, 'Jogue offline ou entre com Google para jogar online com amigos · Seu progresso fica salvo no seu aparelho')));
+        h('div', { class: 'footer' }, 'Jogue offline ou entre com Google para jogar online com amigos · Seu progresso fica salvo no seu aparelho', h('div', { class: 'small muted', style: { marginTop: '4px' } }, 'Versão ' + Core.VERSION + ' (todos os amigos precisam estar na mesma versão para jogar online; se algo falhar, recarregue com Ctrl+F5)'))));
     },
     unmount() { if (this.unsub) { this.unsub(); this.unsub = null; } }
   });

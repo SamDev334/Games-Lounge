@@ -17,12 +17,15 @@
     coisa: { n: 'Coisa', ic: '🧰', c: '#93c5fd', ph: 'O que sou eu?' },
     ano: { n: 'Ano', ic: '📅', c: '#f9a8d8', ph: 'Que ano é este?' }
   };
+  // k = dica em que costuma reconhecer · q = chance de acertar quando arrisca · imp = impulsividade (chuta sem saber)
+  // str = especialidade por categoria (negativo = reconhece mais cedo) · fatigue = fica mais ousado quando perde
   const PERSONAS = [
-    { name: 'Sabichão', emoji: '🦉', k: 8, q: .95, imp: 0, wait: 0, desc: 'Sabe muito, arrisca cedo' },
-    { name: 'Palpiteira', emoji: '🦊', k: 12, q: .8, imp: .12, wait: 0, desc: 'Chuta até sem certeza' },
-    { name: 'Cautelosa', emoji: '🐢', k: 10, q: .97, imp: 0, wait: 1, desc: 'Só arrisca com certeza' },
-    { name: 'Veterano', emoji: '🦁', k: 9, q: .9, imp: .04, wait: 0, desc: 'Experiente e equilibrado' },
-    { name: 'Curioso', emoji: '🐙', k: 11, q: .88, imp: .06, wait: 0, desc: 'Um pouco de tudo' }
+    { name: 'Sabichão', emoji: '🦉', k: 8, q: .95, imp: 0, wait: 0, str: { pessoa: -1, ano: -2, lugar: 1, coisa: 2 }, desc: 'Craque em história, fraco em objetos' },
+    { name: 'Palpiteira', emoji: '🦊', k: 12, q: .8, imp: .12, wait: 0, str: { coisa: -2, pessoa: -1, ano: 2, lugar: 0 }, desc: 'Chuta até sem certeza' },
+    { name: 'Cautelosa', emoji: '🐢', k: 10, q: .97, imp: 0, wait: 1, str: { lugar: -1, coisa: -1, pessoa: 0, ano: 1 }, desc: 'Só arrisca com certeza' },
+    { name: 'Veterano', emoji: '🦁', k: 9, q: .9, imp: .04, wait: 0, str: { pessoa: -2, lugar: -1, coisa: 1, ano: 0 }, desc: 'Experiente em gente e lugares' },
+    { name: 'Curioso', emoji: '🐙', k: 11, q: .88, imp: .06, wait: 0, str: { lugar: -2, coisa: -1, ano: 1, pessoa: 1 }, desc: 'Adora viajar e inventar' },
+    { name: 'Professora', emoji: '🦉', k: 9, q: .93, imp: .02, wait: 0, str: { ano: -3, pessoa: -1, coisa: 1, lugar: 0 }, desc: 'Datas e fatos na ponta da língua' }
   ];
   const TURN_MS = 45000;
 
@@ -187,9 +190,17 @@
     await wait(rand(900, 1700));
     if (!G.aiK) G.aiK = {};
     const key = S.round + ':' + p.id;
-    if (G.aiK[key] == null) G.aiK[key] = Math.max(2, Math.round(ai.k + (Math.random() * 6 - 3) + (S.skill < 1 ? 3 : S.skill > 1 ? -2 : 0) + (S.card.cat === 'ano' ? 1 : 0)));
+    if (G.aiK[key] == null) {
+      const dif = ((S.card.d || 2) - 2) * 2.2;                                            // carta difícil: reconhece mais tarde
+      const spec = (ai.str && ai.str[S.card.cat]) || 0;                                    // especialidade da personalidade
+      G.aiK[key] = Math.max(2, Math.round(ai.k + (Math.random() * 6 - 3) + (S.skill < 1 ? 3 : S.skill > 1 ? -2 : 0) + dif + spec));
+    }
     const k = G.aiK[key] + ai.wait;
-    const wrongGuess = () => { const others = window.PERFIL_CARDS.filter(x => x.cat === S.card.cat && x.id !== S.card.id); return { type: 'guess', s: pick(others).answer }; };
+    const wrongGuess = () => {
+      const others = window.PERFIL_CARDS.filter(x => x.cat === S.card.cat && x.id !== S.card.id);
+      const near = others.filter(x => Math.abs((x.d || 2) - (S.card.d || 2)) <= 1);
+      return { type: 'guess', s: pick(near.length ? near : others).answer };
+    };
     if (c >= k) return Math.random() < ai.q ? { type: 'guess', s: S.card.answer } : wrongGuess();
     if (ai.imp && Math.random() < ai.imp * (S.skill < 1 ? 1.6 : 1)) return Math.random() < .12 ? { type: 'guess', s: S.card.answer } : wrongGuess();
     return { type: 'pass' };
@@ -307,7 +318,7 @@
     G.S = newState(seats, G.cfg, false);
     G.S.round = 1; G.S.card = G.S.deck[0]; G.S.clueNo = 1;
     buildUI(); refresh();
-    await G.P.begin(viewOf(-1));
+    if (!(await G.P.begin(viewOf(-1)))) { G.P.leave(false); return; }
     runGame(tok).catch(e => { if (!(e instanceof Abort)) console.error(e); });
   }
   function guestStart() {

@@ -10,7 +10,7 @@
   const Text = window.TextUtil;
   let G = null;
 
-  const ANS = { s: ['✅ Sim', 's'], n: ['❌ Não', 'n'], i: ['➖ Irrelevante', 'i'], q: ['🤷 Sim e não', 'q'], p: ['🤔 Não entendi — reformule como pergunta de Sim ou Não', 'i'] };
+  const ANS = { s: ['✅ Sim', 's'], n: ['❌ Não', 'n'], i: ['➖ Irrelevante', 'i'], q: ['🤷 Sim e não', 'q'], p: ['🤔 Não entendi — tente com outras palavras, como pergunta de Sim ou Não', 'i'], o: ['✋ Isso é uma pergunta aberta — reformule para que dê para responder Sim ou Não', 'i'] };
   const DIFF = ['', 'Fácil', 'Médio', 'Difícil'];
   const starsNode = n => h('span', { class: 'st' }, [0, 1, 2].map(i => h('i', { style: { fontStyle: 'normal', opacity: i < n ? 1 : .22 } }, '★')));
   const storyById = id => window.DS_STORIES.find(s => s.id === id);
@@ -102,9 +102,11 @@
   function question(name, text) {
     const D = D_(); text = String(text || '').trim().slice(0, 140); if (!text || D.over) return;
     logAdd({ k: 'q', w: name, x: text });
-    if (D.mode === 'human') { D.pend.push({ id: ++D.nid, t: 'q', n: name, x: text }); return; }
-    const m = matchQuestion(D.story, text);
-    if (!m) logAdd({ k: 'a', a: 'p' }); else { D.qCount++; logAdd({ k: 'a', a: m.q[1], x: m.q[0] }); }
+    const open = Text.isOpen(text), m = open ? null : matchQuestion(D.story, text);
+    if (D.mode === 'human') { D.pend.push({ id: ++D.nid, t: 'q', n: name, x: text, sug: m ? m.q[1] : '' }); return; }
+    if (open) logAdd({ k: 'a', a: 'o', sg: Text.suggest(D.story, text, 3) });
+    else if (!m) logAdd({ k: 'a', a: 'p', sg: Text.suggest(D.story, text, 3) });
+    else { D.qCount++; logAdd({ k: 'a', a: m.q[1], x: m.inferred ? '' : m.q[0] }); }
   }
   function theory(name, text) {
     const D = D_(); text = String(text || '').trim().slice(0, 160); if (!text || D.over) return;
@@ -181,7 +183,11 @@
     log.innerHTML = '';
     (v.log || []).forEach(e => {
       if (e.k === 'q') log.append(h('div', { class: 'ds-msg q' }, v.names && v.names.length > 1 ? h('small', null, e.w) : null, e.x));
-      else if (e.k === 'a') { const [lab, cls] = ansLabel(e.a); log.append(h('div', { class: 'ds-msg a ' + cls }, lab, e.x && e.a !== 'p' && role !== 'nar' && v.mode === 'auto' ? h('small', { style: { fontWeight: 400 } }, 'entendi: ' + e.x) : null)); }
+      else if (e.k === 'a') {
+        const [lab, cls] = ansLabel(e.a);
+        log.append(h('div', { class: 'ds-msg a ' + cls }, lab, e.x && e.a !== 'p' && e.a !== 'o' && role !== 'nar' && v.mode === 'auto' ? h('small', { style: { fontWeight: 400 } }, 'entendi: ' + e.x) : null,
+          (e.a === 'p' || e.a === 'o') && e.sg && e.sg.length && role !== 'nar' ? h('div', { class: 'ds-sg' }, e.sg.map(q => h('button', { class: 'btn sm', onclick: () => act('ask', q) }, q))) : null));
+      }
       else if (e.k === 't') log.append(h('div', { class: 'ds-msg q' }, h('small', null, '🧩 Teoria' + (v.names && v.names.length > 1 ? ' de ' + e.w : '')), e.x));
       else if (e.k === 'r') log.append(h('div', { class: 'ds-msg hint' }, heatTxt[e.a] || ''));
       else if (e.k === 'h') log.append(h('div', { class: 'ds-msg hint' }, '💡 ' + e.x));
@@ -214,7 +220,8 @@
       c.append(h('div', { class: 'panel' }, h('h3', null, '🔒 Solução (só você vê)'), h('div', { class: 'small', style: { lineHeight: 1.5 } }, v.solution)));
       if (!v.pend.length) c.append(h('div', { class: 'muted small center', style: { padding: '6px' } }, 'Nenhuma pergunta pendente.'));
       v.pend.forEach(p => {
-        const box = h('div', { class: 'ds-pend' }, h('div', { class: 'who' }, (p.t === 'q' ? '❓ ' : '🧩 Teoria de ') + p.n), h('div', { style: { margin: '4px 0 8px', fontSize: '15px' } }, p.x));
+        const box = h('div', { class: 'ds-pend' }, h('div', { class: 'who' }, (p.t === 'q' ? '❓ ' : '🧩 Teoria de ') + p.n), h('div', { style: { margin: '4px 0 8px', fontSize: '15px' } }, p.x),
+          p.sug ? h('div', { class: 'small muted', style: { marginBottom: '6px' } }, '🤖 Sugestão do sistema: ', h('b', null, (ANS[p.sug] || ANS.i)[0].replace(/^[^\wÀ-ú]+/, ''))) : null);
         const row = h('div', { class: 'ds-ans' });
         const mk = (t, a, cls) => row.append(h('button', { class: 'btn ' + (cls || ''), onclick: () => answerPend(p.id, a) }, t));
         if (p.t === 'q') { mk('✅ Sim', 's', 'good'); mk('❌ Não', 'n', 'danger'); mk('➖ Irrelev.', 'i'); mk('🤷 Em parte', 'q'); }
@@ -254,9 +261,10 @@
   async function suggest() {
     const s = G.mode === 'guest' ? storyById(G.v.id) : G.D.story; if (!s) return;
     const asked = new Set((G.v.log || []).filter(e => e.k === 'a' && e.x).map(e => e.x));
-    const opts = shuffle(s.qa.filter(q => !asked.has(q[0]))).slice(0, 4);
+    const pool = shuffle(s.qa.map(q => q[0]).concat(Text.GENERIC.map(g => g[1]))).filter(q => !asked.has(q));
+    const opts = pool.slice(0, 6);
     if (!opts.length) { Core.toast('Você já fez todas as perguntas sugeridas!'); return; }
-    const r = await Core.modal({ title: '🧭 Perguntas sugeridas', body: 'Toque em uma para perguntar:', buttons: opts.map(q => ({ text: q[0], cls: 'primary', value: q[0] })).concat([{ text: 'Fechar', cls: 'ghost', value: false }]) });
+    const r = await Core.modal({ title: '🧭 Perguntas sugeridas', body: 'Toque em uma para perguntar:', buttons: opts.map(q => ({ text: q, cls: 'primary', value: q })).concat([{ text: 'Fechar', cls: 'ghost', value: false }]) });
     if (r) act('ask', r);
   }
 
@@ -267,7 +275,7 @@
     G.D = newGame(story, G.nar === 'auto' ? 'auto' : 'human', names);
     logAdd({ k: 's', x: G.D.mode === 'human' ? `${me.name} narra esta história. Detetives, façam suas perguntas!` : 'O narrador automático está pronto. Boa investigação!' });
     buildUI(); G.v = viewOf(true); renderAll(G.v);
-    await G.P.begin(viewOf(false));
+    if (!(await G.P.begin(viewOf(false)))) G.P.leave(false);
   }
   function guestStart() { G.mode = 'guest'; G.v = null; G.box.innerHTML = ''; G.box.append(h('div', { class: 'muted center', style: { padding: '30px' } }, 'Conectando à investigação…')); }
   function onPub(pub) {

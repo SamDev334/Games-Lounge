@@ -117,7 +117,7 @@ window.DS_STORIES = [
       ['Ele estava num avião?', 'n', 'aviao|jato'],
       ['Ele estava num helicóptero?', 'n', 'helicoptero'],
       ['Tem a ver com sorte ou sorteio?', 's', 'sorteio|sorte|escolh|palito'],
-      ['O fósforo tem a ver com fogo ou incêndio?', 'n', 'fogo|incendi|queimad|chama'],
+      ['O fósforo tem a ver com fogo ou incêndio?', 'n', '_fogo|incendi|queimad|_chama'],
       ['Alguém o empurrou?', 'n', 'empurr'],
       ['Outras pessoas participaram da decisão?', 's', 'outras|decid|combin|grupo|junto'],
       ['Ele tinha uma doença?', 'n', 'doenca|doente|infarto|coracao'],
@@ -201,7 +201,7 @@ window.DS_STORIES = [
       ['O homem ficou triste?', 's', 'triste|chor|choro|emocion|abalad|choc'],
       ['Ele conhecia o dono do restaurante?', 'n', 'conhec&dono|cozinheiro|garcom'],
       ['O albatroz é uma ave?', 's', 'albatroz&ave|passaro|bicho|animal'],
-      ['O restaurante fica perto do mar?', 's', 'mar|praia|litoral|beira'],
+      ['O restaurante fica perto do mar?', 's', '_mar_|praia|litoral|beira'],
       ['Ele tinha alguma doença?', 'n', 'doenca|doente|alergia'],
       ['Ele passou fome no passado?', 's', 'fome|faminto|comida|sobreviv']
     ]

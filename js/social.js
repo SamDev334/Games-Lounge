@@ -162,11 +162,16 @@
     S.db.ref('invites/' + toUid + '/' + S.user.uid).set({ game, room, name: S.me.name, avatar: S.me.avatar, ts: S.TS });
   S.clearInvite = from => S.db.ref('invites/' + S.user.uid + '/' + from).remove().catch(() => { });
   S.acceptInvite = function (inv) {
-    S.clearInvite(inv.from);
     S.closePanel();
     const cur = location.hash.replace('#', '');
     const g = Core.games[inv.game];
-    if (cur === inv.game && g && g.joinRoom) g.joinRoom(inv);
+    if (!g) {                                                    // o navegador está com uma versão antiga do site (cache)
+      Core.modal({ title: 'Atualize a página', body: 'Este convite é para um jogo que a sua versão do site ainda não tem. Recarregue a página (Ctrl+F5 no computador; no celular, feche e abra o navegador) e aceite o convite de novo.', buttons: [{ text: 'Depois', cls: 'ghost', value: false }, { text: '↻ Recarregar agora', cls: 'primary', value: true }] })
+        .then(ok => { if (ok) location.reload(); });
+      return;                                                    // o convite continua valendo
+    }
+    S.clearInvite(inv.from);
+    if (cur === inv.game && g.joinRoom) g.joinRoom(inv);
     else { Core.pendingRoom = inv; Core.go(inv.game); }
   };
   function showInvite(inv, key) {
@@ -218,6 +223,9 @@
           h('div', { class: 'grow' }, nameIn,
             h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Seu código de amigo: ', h('b', { class: 'gold code' }, me.code), ' ', h('button', { class: 'btn sm', onclick: () => copy(me.code, 'Código copiado!') }, 'Copiar')))),
         avRow);
+      S.invites.forEach(inv => box.append(h('div', { class: 'f-row', style: { background: 'rgba(233,196,106,.08)', borderRadius: '10px', marginBottom: '6px' } },
+        h('div', { class: 'av' }, inv.avatar || '🙂'), h('div', { class: 'grow' }, h('b', null, inv.name || 'Amigo'), h('div', { class: 'small muted' }, 'te convidou para ' + (GAMENAME[inv.game] || inv.game))),
+        h('button', { class: 'btn sm good', onclick: () => S.acceptInvite(inv) }, 'Entrar'), h('button', { class: 'btn sm ghost', onclick: () => S.clearInvite(inv.from) }, '✕'))));
       const nReq = S.requests.length;
       const tabs = h('div', { class: 'seg full', style: { margin: '10px 0' } },
         [['friends', `Amigos (${S.friends.size})`], ['requests', `Pedidos${nReq ? ' (' + nReq + ')' : ''}`], ['add', 'Adicionar']].map(([k, t]) =>
@@ -269,16 +277,23 @@
     friends.forEach(f => { members[f.uid] = true; players[f.uid] = { name: f.name, avatar: f.avatar }; });
     const room = Object.assign({ game, host: me, hostName: S.me.name, hostAvatar: S.me.avatar, members, players, created: S.TS, status: 'waiting' }, extra || {});
     await db.ref('rooms/' + rid).set(room);
-    await Promise.all(friends.map(f => S.sendInvite(f.uid, game, rid)));
+    const res = await Promise.allSettled(friends.map(f => S.sendInvite(f.uid, game, rid)));
+    const okN = res.filter(r => r.status === 'fulfilled').length;
+    if (!okN) { await db.ref('rooms/' + rid).remove().catch(() => { }); throw new Error('Não foi possível enviar os convites (verifique se vocês ainda são amigos e as regras do banco).'); }
+    if (okN < friends.length) Core.toast(`${friends.length - okN} convite(s) não foram enviados.`, 3500);
     return rid;
   };
   /** convidado aceita entrar na sala multi-jogador */
   S.joinMemberRoom = async function (inv) {
     const me = S.user.uid;
-    const snap = await S.db.ref('rooms/' + inv.room).get();
-    if (!snap.exists()) throw new Error('Convite expirado');
+    let snap;
+    try { snap = await S.db.ref('rooms/' + inv.room).get(); }
+    catch (e) { throw new Error(/permission/i.test(e.message || '') ? 'Sem permissão para entrar nessa sala (o anfitrião pode ter cancelado).' : 'Falha de conexão ao entrar na sala.'); }
+    if (!snap.exists()) throw new Error('Essa sala não existe mais (o anfitrião saiu ou cancelou).');
     const room = snap.val();
-    if (!(room.members && room.members[me]) && room.guest !== me) throw new Error('Convite inválido');
+    if (inv.game && room.game && room.game !== inv.game) throw new Error('Convite para outro jogo.');
+    if (!(room.members && room.members[me]) && room.guest !== me) throw new Error('Você não está na lista de convidados dessa sala.');
+    if (room.status === 'playing' && !(room.pub)) throw new Error('A partida já começou.');
     await S.db.ref('rooms/' + inv.room + '/ready/' + me).set(true);
     return room;
   };
@@ -301,6 +316,10 @@
       el.append(h('div', { class: 'row sb', style: { marginBottom: '8px' } },
         h('div', { class: 'olrow' }, h('div', { class: 'av' }, S.me.avatar), h('b', null, S.me.name)),
         h('button', { class: 'btn sm', onclick: () => S.openPanel({}) }, '👥 Amigos' + (S.requests.length ? ` (${S.requests.length})` : ''))));
+      const pend = S.invites.filter(i => i.game === opts.game);
+      pend.forEach(inv => el.append(h('div', { class: 'plan', style: { margin: '6px 0 10px', borderColor: 'var(--gold)' } }, `📩 ${inv.name || 'Um amigo'} te convidou para jogar! `,
+        h('button', { class: 'btn sm primary', onclick: () => S.acceptInvite(inv) }, 'Entrar na sala'), ' ',
+        h('button', { class: 'btn sm ghost', onclick: () => S.clearInvite(inv.from) }, 'Ignorar'))));
       const saved = opts.resumeKey ? Core.store.get(opts.resumeKey, null) : null;
       if (saved && opts.onResume) el.append(h('div', { class: 'plan', style: { margin: '6px 0 10px' } }, 'Partida online em andamento. ',
         h('button', { class: 'btn sm primary', onclick: opts.onResume }, '↻ Retomar'), ' ',
@@ -312,10 +331,10 @@
         const chosen = sel.has(f.uid);
         el.append(h('div', { class: 'f-row' },
           h('div', { class: 'av' }, f.avatar), h('span', { class: 'dot-st ' + (f.online ? 'on' : '') }),
-          h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'small muted' }, f.online ? 'online' : 'offline')),
+          h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'small muted' }, f.online ? 'online' : 'offline (o convite fica esperando)')),
           opts.multi
-            ? h('button', { class: 'btn sm' + (chosen ? ' good' : '') + (f.online ? '' : ' disabled'), onclick: () => { if (chosen) sel.delete(f.uid); else if (sel.size < max) sel.add(f.uid); else Core.toast('Máximo de ' + max + ' amigos'); render(); } }, chosen ? '✓ Convidado' : '+ Convidar')
-            : h('button', { class: 'btn sm primary' + (f.online ? '' : ' disabled'), onclick: () => opts.onCreate([f]) }, '⚔ Desafiar')));
+            ? h('button', { class: 'btn sm' + (chosen ? ' good' : ''), onclick: () => { if (chosen) sel.delete(f.uid); else if (sel.size < max) sel.add(f.uid); else Core.toast('Máximo de ' + max + ' amigos'); render(); } }, chosen ? '✓ Convidado' : '+ Convidar')
+            : h('button', { class: 'btn sm primary', onclick: () => opts.onCreate([f]) }, '⚔ Desafiar')));
       });
       if (opts.multi) el.append(h('button', { class: 'btn primary block' + (sel.size ? '' : ' disabled'), style: { marginTop: '10px' }, onclick: () => opts.onCreate(Array.from(sel).map(id => S.friends.get(id)).filter(Boolean)) }, opts.createLabel || 'Criar sala'));
     };

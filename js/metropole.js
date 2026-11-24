@@ -71,6 +71,24 @@
   comp(38, 'Companhia de Táxi Aéreo', 'Táxi Aéreo', '🚁', 200);
   sr(39);
 
+  // tema visual (ilustração + ícone) de cada terreno
+  const THEMES = { beach: ['🏖️', 'Praia'], avenue: ['🛣️', 'Avenida'], skyline: ['🏙️', 'Centro financeiro'], mansion: ['🏡', 'Bairro nobre'], stadium: ['🏟️', 'Estádio'], track: ['🏎️', 'Autódromo'], bay: ['⛵', 'Baía'], park: ['🌳', 'Parque'] };
+  const TILE_THEME = { 1: 'beach', 3: 'avenue', 4: 'beach', 6: 'skyline', 8: 'avenue', 9: 'avenue', 11: 'mansion', 13: 'avenue', 14: 'stadium', 17: 'track', 19: 'stadium', 21: 'park', 22: 'bay', 25: 'avenue', 26: 'skyline', 27: 'mansion', 29: 'beach', 31: 'beach', 32: 'beach', 34: 'beach', 35: 'mansion', 37: 'skyline' };
+  Object.keys(TILE_THEME).forEach(i => { T[i].th = TILE_THEME[i]; T[i].ic = THEMES[TILE_THEME[i]][0]; });
+  const WIN = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c || '#ffe58a'}"/>`;
+  const ART = {
+    beach: c => `<rect width="200" height="70" fill="#7ec8f2"/><circle cx="162" cy="17" r="11" fill="#ffd45e"/><path d="M0 44 Q25 36 50 44 T100 44 T150 44 T200 44 V70 H0Z" fill="#2a8fd0"/><path d="M0 55 Q30 49 60 55 T120 55 T180 55 T240 55 V70 H0Z" fill="#f3dfa2"/><path d="M40 62 Q45 42 38 26" stroke="#7a4a1e" stroke-width="3" fill="none"/><path d="M38 26 q-14 -2 -20 8 M38 26 q10 -10 22 -4 M38 26 q-8 -12 -20 -8 M38 26 q12 -2 18 10" stroke="#2f9e44" stroke-width="3.2" fill="none" stroke-linecap="round"/><rect x="110" y="30" width="14" height="16" fill="#f1ebdd"/><rect x="126" y="24" width="12" height="22" fill="${c}"/><rect x="140" y="32" width="16" height="14" fill="#f1ebdd"/>${WIN(113, 34, 3, 4)}${WIN(129, 29, 3, 4)}${WIN(129, 37, 3, 4)}`,
+    avenue: c => `<rect width="200" height="70" fill="#9bb8d6"/><rect x="0" y="40" width="200" height="30" fill="#4a4f59"/><path d="M0 62 L200 62" stroke="#f4d03f" stroke-width="2" stroke-dasharray="10 8"/><rect x="6" y="14" width="26" height="32" fill="${c}"/><rect x="36" y="24" width="22" height="22" fill="#d9d2c0"/><rect x="146" y="10" width="24" height="36" fill="#cfd6e4"/><rect x="174" y="22" width="22" height="24" fill="${c}"/>${[0, 1, 2].map(i => WIN(10 + i * 8, 18, 4, 5) + WIN(10 + i * 8, 28, 4, 5) + WIN(150 + i * 7, 15, 3, 5) + WIN(150 + i * 7, 27, 3, 5)).join('')}<rect x="70" y="50" width="26" height="9" rx="3" fill="#e04646"/><rect x="76" y="46" width="14" height="6" rx="2" fill="#f1f1f1"/><circle cx="76" cy="60" r="3" fill="#111"/><circle cx="90" cy="60" r="3" fill="#111"/><rect x="120" y="52" width="22" height="8" rx="3" fill="#f3d03e"/>`,
+    skyline: c => `<defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b3a6b"/><stop offset="1" stop-color="#e98a6a"/></linearGradient></defs><rect width="200" height="70" fill="url(#sk)"/><circle cx="30" cy="16" r="8" fill="#ffe9b0"/>${[[8, 34, 16], [26, 22, 20], [48, 38, 14], [64, 12, 22], [90, 28, 18], [112, 18, 24], [140, 32, 16], [158, 8, 20], [182, 26, 18]].map(([x, y, w], i) => `<rect x="${x}" y="${y}" width="${w}" height="${70 - y}" fill="${i % 3 === 0 ? c : '#26324f'}" opacity=".95"/>` + [0, 1, 2, 3].map(k => WIN(x + 3, y + 4 + k * 9, 3, 4) + WIN(x + w - 7, y + 4 + k * 9, 3, 4)).join('')).join('')}`,
+    mansion: c => `<rect width="200" height="70" fill="#a8d8f0"/><rect y="52" width="200" height="18" fill="#58b368"/><rect x="54" y="26" width="92" height="30" fill="#f4ead2"/><path d="M46 28 L100 6 L154 28Z" fill="${c}"/><rect x="92" y="38" width="16" height="18" fill="#7a4a1e"/>${WIN(62, 32, 12, 10)}${WIN(126, 32, 12, 10)}<rect x="30" y="34" width="6" height="22" fill="#7a4a1e"/><circle cx="33" cy="30" r="14" fill="#2f9e44"/><rect x="164" y="38" width="6" height="18" fill="#7a4a1e"/><circle cx="167" cy="34" r="12" fill="#3fae5a"/>`,
+    stadium: c => `<rect width="200" height="70" fill="#27355f"/><ellipse cx="100" cy="46" rx="86" ry="22" fill="#5a6577"/><ellipse cx="100" cy="46" rx="74" ry="17" fill="${c}" opacity=".8"/><ellipse cx="100" cy="48" rx="58" ry="11" fill="#3fae5a"/><rect x="96" y="38" width="8" height="20" fill="none" stroke="#fff" stroke-width="1.2"/><circle cx="100" cy="48" r="5" fill="none" stroke="#fff" stroke-width="1.2"/><rect x="10" y="8" width="3" height="34" fill="#cfd6e4"/><rect x="187" y="8" width="3" height="34" fill="#cfd6e4"/><rect x="5" y="5" width="13" height="7" fill="#fff6c9"/><rect x="182" y="5" width="13" height="7" fill="#fff6c9"/>`,
+    track: c => `<rect width="200" height="70" fill="#58b368"/><path d="M20 50 Q10 18 60 20 T120 22 Q190 20 178 48 Q170 62 130 56 T70 60 Q30 66 20 50Z" fill="none" stroke="#3b3f48" stroke-width="12" stroke-linejoin="round"/><path d="M20 50 Q10 18 60 20 T120 22 Q190 20 178 48 Q170 62 130 56 T70 60 Q30 66 20 50Z" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="5 5"/><rect x="108" y="14" width="4" height="16" fill="#fff"/><rect x="108" y="14" width="4" height="4" fill="#111"/><rect x="108" y="22" width="4" height="4" fill="#111"/><rect x="84" y="14" width="14" height="7" rx="2" fill="${c}"/><circle cx="88" cy="23" r="2.4" fill="#111"/><circle cx="95" cy="23" r="2.4" fill="#111"/>`,
+    bay: c => `<rect width="200" height="70" fill="#bde3f7"/><path d="M0 46 Q50 40 100 46 T200 46 V70 H0Z" fill="#2a8fd0"/><path d="M96 46 Q112 6 150 18 Q170 24 176 46Z" fill="#6a8f5a"/><rect x="146" y="14" width="3" height="10" fill="#cfd6e4"/><path d="M40 54 L70 54 L64 62 L46 62Z" fill="#f1ebdd"/><path d="M55 54 L55 30 L70 52Z" fill="${c}"/><path d="M53 54 L53 36 L42 52Z" fill="#fff"/><circle cx="24" cy="14" r="9" fill="#ffd45e"/>`,
+    park: c => `<rect width="200" height="70" fill="#a8d8f0"/><rect y="44" width="200" height="26" fill="#58b368"/><ellipse cx="100" cy="56" rx="40" ry="8" fill="#6fc3ea"/>${[[22, 36], [50, 40], [150, 34], [176, 40]].map(([x, y]) => `<rect x="${x - 2}" y="${y + 8}" width="4" height="14" fill="#7a4a1e"/><circle cx="${x}" cy="${y}" r="13" fill="#2f9e44"/>`).join('')}<rect x="84" y="36" width="32" height="4" fill="${c}"/><rect x="86" y="40" width="3" height="8" fill="#555"/><rect x="111" y="40" width="3" height="8" fill="#555"/>`
+  };
+  const artSvg = (th, c) => `<svg viewBox="0 0 200 70" preserveAspectRatio="xMidYMid slice">${(ART[th] || ART.avenue)(c || '#6c8cff')}</svg>`;
+  const artBox = t => h('div', { class: 'tile-art', html: artSvg(t.th, GR[t.g] ? GR[t.g].c : '#6c8cff') });
+
   const GT = {}; T.forEach(t => { if (t.g) (GT[t.g] = GT[t.g] || []).push(t.i); });
   const COMPS = T.filter(t => t.t === 'comp').map(t => t.i);
   const COMP_MULT = [0, 8, 16, 26, 38, 52, 70];                          // aluguel da companhia = dados × multiplicador (por qtd. possuída)
@@ -138,11 +156,12 @@
     if (t.t === 'prop') return t.r[pr.h];
     return dice * COMP_MULT[nOwned(pr.owner, COMPS)] * (mult || 1);
   }
+  const bldCount = p => owned(p).reduce((a, t) => { if (t.t === 'prop') { const k = M.props[t.i].h; if (k === 5) a.H++; else a.h += k; } return a; }, { h: 0, H: 0 });
   const rentLabel = h => (h === 0 ? 'terreno' : h === 5 ? 'hotel' : h + (h === 1 ? ' casa' : ' casas'));
 
   // ---------------- montagem ----------------
   function mount(root) {
-    M = { root, tok: {}, speed: 1, skill: Core.store.get('metro.skill', 1), N: Core.store.get('metro.n', 4), cash: Core.store.get('metro.cash2', 2500), limit: Core.store.get('metro.limit', 60), spectator: false };
+    M = { root, tok: {}, speed: 1, is3d: Core.store.get('metro.3d', true), skill: Core.store.get('metro.skill', 1), N: Core.store.get('metro.n', 4), cash: Core.store.get('metro.cash2', 2500), limit: Core.store.get('metro.limit', 60), spectator: false };
     root.append(Core.topbar('METRÓPOLE', h('button', { class: 'btn icon', title: 'Regras', onclick: showRules }, '?')));
     M.box = h('div', { class: 'mp' }); root.append(M.box);
     showSetup();
@@ -156,7 +175,7 @@
         '<b>Objetivo:</b> deixar os adversários falidos e ser o último de pé (ou, no modo por rodadas, ter o maior patrimônio).<br>' +
         '<b>Turno:</b> role 2 dados e ande. Dobles = jogue de novo; 3 dobles seguidos = Prisão.<br>' +
         '<b>Terrenos e companhias:</b> ao cair numa propriedade livre, compre pelo preço ou ela vai a <b>leilão</b>. Cair numa de outro jogador = pagar aluguel.<br>' +
-        '<b>Construção:</b> você pode construir <b>casas</b> (até 4) e depois um <b>hotel</b> direto em cada terreno que possui, sem precisar completar região. Cada casa/hotel aumenta muito o aluguel daquele terreno. Você pode construir ao <b>cair na sua propriedade</b> ou pelo botão 🏗 Gerenciar. Estoque do banco: 32 casas e 12 hotéis.<br>' +
+        '<b>Construção:</b> você pode construir <b>casas</b> (até 4) e depois um <b>hotel</b> direto em cada terreno que possui, sem precisar completar região. Cada casa/hotel aumenta muito o aluguel daquele terreno. Você pode construir ao <b>cair na sua propriedade</b> ou pelo botão 🏗 Gerenciar. Não há limite de casas ou hotéis. Com dinheiro sobrando, use <b>🏨 Hotel direto</b>: você paga as casas que faltam e já recebe o hotel.<br>' +
         '<b>Companhias:</b> o aluguel é o valor dos dados × um multiplicador que cresce com o número de companhias do dono (são 6).<br>' +
         '<b>Negociação:</b> venda, compre ou troque propriedades e dinheiro com qualquer jogador. Se a IA recusar, ela faz uma <b>contraproposta</b> com o valor que aceitaria.<br>' +
         '<b>Hipoteca:</b> receba metade do preço (terreno sem construções); para resgatar pague metade + 10%. Hipotecadas não rendem aluguel.<br>' +
@@ -197,7 +216,7 @@
       players.push({ id: i, name: human ? Core.settings.name : st.name, emoji: TOKENS[i], face: human ? '🙂' : st.emoji, color: PCOL[i], human, ai: st, cash: M.cash, debt: 0, pos: 0, jail: 0, jailCards: 0, bankrupt: false, lastTrade: -9 });
     }
     M.players = players; M.props = T.map(() => ({ owner: -1, h: 0, mort: false }));
-    M.houses = 32; M.hotels = 12; M.turn = 0; M.round = 1; M.doubles = 0; M.dice = [0, 0]; M.speed = 1; M.log = []; M.lastHumanOffer = -9; M.nTrades = 0; M.nBuilt = 0; M.nBank = 0; M.offers = {};
+    M.turn = 0; M.round = 1; M.doubles = 0; M.dice = [0, 0]; M.speed = 1; M.log = []; M.lastHumanOffer = -9; M.nTrades = 0; M.nBuilt = 0; M.nBank = 0; M.offers = {};
     M.deck = shuffle(CARDS.slice());
     buildUI(); renderState();
     runGame(tok).catch(e => { if (!(e instanceof Abort)) console.error(e); });
@@ -222,8 +241,10 @@
       players: h('div', { class: 'mp-players' }), log: h('div', { class: 'mp-log' }), ctl: h('div', { class: 'mp-ctl' })
     };
     board.append(h('div', { class: 'mp-center' }, h('div', { class: 'mp-title' }, 'METRÓPOLE'), M.ui.info, M.ui.dice, M.ui.msg));
-    M.box.append(board, M.ui.ctl, M.ui.players, M.ui.log,
-      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo'), h('button', { class: 'btn sm', onclick: showRules }, '📖 Regras'), h('button', { class: 'btn sm', onclick: () => { M.speed = M.speed > .5 ? .25 : 1; Core.toast(M.speed < 1 ? 'Velocidade rápida' : 'Velocidade normal'); } }, '⏩ Velocidade')));
+    M.stage = h('div', { class: 'mp-stage ' + (M.is3d ? 'd3' : 'flat') }, board);
+    M.box.append(M.stage, M.ui.ctl, M.ui.players, M.ui.log,
+      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn sm', onclick: showSetup }, '⚙ Novo jogo'),
+        h('button', { class: 'btn sm', onclick: e => { M.is3d = !M.is3d; Core.store.set('metro.3d', M.is3d); M.stage.className = 'mp-stage ' + (M.is3d ? 'd3' : 'flat'); e.currentTarget.textContent = M.is3d ? '▦ 2D' : '🧊 3D'; renderState(); } }, M.is3d ? '▦ 2D' : '🧊 3D'), h('button', { class: 'btn sm', onclick: showRules }, '📖 Regras'), h('button', { class: 'btn sm', onclick: () => { M.speed = M.speed > .5 ? .25 : 1; Core.toast(M.speed < 1 ? 'Velocidade rápida' : 'Velocidade normal'); } }, '⏩ Velocidade')));
   }
   const dieEl = v => {
     const pat = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] }[v] || [];
@@ -231,6 +252,12 @@
     for (let i = 0; i < 9; i++) d.append(h('i', { class: pat.includes(i) ? 'on' : '' }));
     return d;
   };
+  const bx = (cls, color) => `<span class="bx ${cls}" style="--oc:${color}"><i class="f lf"></i><i class="f fr"></i><i class="f rt"></i><i class="f tp"></i>${cls === 'house' ? '<span class="bx roof"><i class="f lf"></i><i class="f fr"></i><i class="f rt"></i><i class="f tp"></i></span>' : '<span class="bx cap"><i class="f lf"></i><i class="f fr"></i><i class="f rt"></i><i class="f tp"></i></span>'}</span>`;
+  function bandHtml(n, color) {
+    if (!n) return '';
+    if (!M.is3d) return n === 5 ? '<b class="hotel"></b>' : '<b class="hs"></b>'.repeat(n);
+    return n === 5 ? bx('hotel', color) : bx('house', color).repeat(n);
+  }
   function renderState() {
     if (!M || !M.ui) return;
     T.forEach(t => {
@@ -239,7 +266,7 @@
       if (isOwnable(t)) {
         const o = pr.owner >= 0 ? M.players[pr.owner] : null;
         el.style.setProperty('--oc', o ? o.color : 'transparent'); el.classList.toggle('owned', !!o);
-        if (t.g) { const b = el.querySelector('.band'); b.innerHTML = pr.h === 5 ? '<b class="hotel"></b>' : '<b class="hs"></b>'.repeat(pr.h); }
+        if (t.g) { const b = el.querySelector('.band'); b.innerHTML = bandHtml(pr.h, o ? o.color : '#888'); }
       }
       const tk = el.querySelector('.tk'); tk.innerHTML = '';
     });
@@ -247,7 +274,7 @@
       const tk = M.tileEls[p.pos].querySelector('.tk');
       tk.append(h('u', { class: 'tok' + (M.turn === p.id ? ' cur' : ''), style: { '--pc': p.color }, title: p.name }, p.emoji));
     });
-    M.ui.info.textContent = `Rodada ${M.round}${M.limit ? ' / ' + M.limit : ''} · Vez: ${M.players[M.turn].name} · 🏠${M.houses} 🏨${M.hotels}`;
+    M.ui.info.textContent = `Rodada ${M.round}${M.limit ? ' / ' + M.limit : ''} · Vez: ${M.players[M.turn].name} · 🏠${M.players.reduce((a, p) => a + bldCount(p).h, 0)} 🏨${M.players.reduce((a, p) => a + bldCount(p).H, 0)}`;
     M.ui.dice.innerHTML = ''; if (M.dice[0]) { M.ui.dice.append(dieEl(M.dice[0]), dieEl(M.dice[1])); }
     M.ui.players.innerHTML = '';
     M.players.forEach(p => {
@@ -269,7 +296,7 @@
     const t = T[i], pr = M.props[i], o = pr.owner >= 0 ? M.players[pr.owner] : null;
     const body = h('div', null);
     if (t.g) {
-      body.append(h('div', { class: 'tcard-head', style: { background: GR[t.g].c } }, t.n));
+      body.append(artBox(t), h('div', { class: 'tcard-head', style: { background: GR[t.g].c } }, t.n), h('div', { class: 'small muted', style: { marginBottom: '6px' } }, THEMES[t.th][1] + ' · ' + THEMES[t.th][0]));
       [['Aluguel do terreno', 0], ['Com 1 casa', 1], ['Com 2 casas', 2], ['Com 3 casas', 3], ['Com 4 casas', 4], ['Com hotel', 5]].forEach(([a, k]) =>
         body.append(h('div', { class: 'row sb small' + (o && pr.h === k ? ' good-t' : '') }, h('span', null, a), h('b', null, fmt(t.r[k])))));
       body.append(h('div', { class: 'row sb small muted', style: { marginTop: '6px' } }, h('span', null, 'Preço de cada casa / hotel'), h('span', null, fmt(t.hc))));
@@ -458,7 +485,7 @@
     const cred = toId >= 0 ? M.players[toId] : null;
     M.nBank = (M.nBank || 0) + 1;
     say(`💥 ${p.name} FALIU${cred ? ` (credor: ${cred.name})` : ''}!`); Core.snd('lose');
-    owned(p).forEach(t => { if (t.t === 'prop') { const pr = M.props[t.i]; if (pr.h === 5) { M.hotels++; } else M.houses += pr.h; pr.h = 0; } });
+    owned(p).forEach(t => { if (t.t === 'prop') M.props[t.i].h = 0; });
     if (cred) {
       cred.cash += p.cash; cred.jailCards += p.jailCards;
       owned(p).forEach(t => { const pr = M.props[t.i]; pr.owner = cred.id; if (pr.mort) { const fee = Math.ceil(mortVal(t) * .1); cred.cash -= Math.min(cred.cash, fee); } });
@@ -478,7 +505,7 @@
   async function humanBuy(p, i) {
     const t = T[i];
     while (true) {
-      const body = h('div', null, h('div', { class: 'tcard-head', style: { background: t.g ? GR[t.g].c : '#6a5a1f' } }, (t.ic || '') + ' ' + t.n),
+      const body = h('div', null, t.g ? artBox(t) : null, h('div', { class: 'tcard-head', style: { background: t.g ? GR[t.g].c : '#6a5a1f' } }, (t.ic || '') + ' ' + t.n),
         h('p', null, `Preço: ${fmt(t.p)} · Seu dinheiro: ${fmt(p.cash)}`),
         t.g ? h('div', { class: 'small muted' }, `Aluguel ${fmt(t.r[0])} · com hotel ${fmt(t.r[5])} · cada casa ${fmt(t.hc)}`) : h('div', { class: 'small muted' }, 'Aluguel: dados × multiplicador (cresce com o nº de companhias).'));
       const btns = [];
@@ -543,15 +570,21 @@
   // ---------------- construção / hipoteca (direto no terreno) ----------------
   function canBuild(p, i) {
     const t = T[i], pr = M.props[i]; if (t.t !== 'prop' || pr.owner !== p.id || pr.mort || pr.h >= 5) return false;
-    if (pr.h === 4 ? M.hotels <= 0 : M.houses <= 0) return false;
     return p.cash >= t.hc;
   }
-  function doBuild(p, i) { const pr = M.props[i], hc = T[i].hc; M.nBuilt = (M.nBuilt || 0) + 1; pr.h++; p.cash -= hc; if (pr.h === 5) { M.hotels--; M.houses += 4; } else M.houses--; }
+  function doBuild(p, i) { const pr = M.props[i], hc = T[i].hc; M.nBuilt = (M.nBuilt || 0) + 1; pr.h++; p.cash -= hc; }
+  /** hotel direto: paga as casas que faltam (5 − casas atuais) e já recebe o hotel */
+  const hotelCost = i => (5 - M.props[i].h) * T[i].hc;
+  function canHotel(p, i) {
+    const t = T[i], pr = M.props[i];
+    return t.t === 'prop' && pr.owner === p.id && !pr.mort && pr.h < 5 && p.cash >= hotelCost(i);
+  }
+  function doHotel(p, i) { const pr = M.props[i]; M.nBuilt = (M.nBuilt || 0) + (5 - pr.h); p.cash -= hotelCost(i); pr.h = 5; }
   function canSell(p, i) {
     const t = T[i], pr = M.props[i]; if (t.t !== 'prop' || pr.owner !== p.id || pr.h <= 0) return false;
-    return pr.h !== 5 || M.houses >= 4;
+    return true;
   }
-  function doSell(p, i) { const pr = M.props[i]; if (pr.h === 5) { M.hotels++; M.houses -= 4; } else M.houses++; pr.h--; p.cash += T[i].hc / 2; }
+  function doSell(p, i) { const pr = M.props[i]; pr.h--; p.cash += T[i].hc / 2; }
   function canMortgage(p, i) { const t = T[i], pr = M.props[i]; return pr.owner === p.id && !pr.mort && (t.t !== 'prop' || pr.h === 0); }
   function doMortgage(p, i) { M.props[i].mort = true; p.cash += mortVal(T[i]); }
   function canUnmortgage(p, i) { const pr = M.props[i]; return pr.owner === p.id && pr.mort && p.cash >= unmortCost(T[i]); }
@@ -567,13 +600,17 @@
         return;
       }
       const hotel = pr.h === 4;
-      const body = h('div', null, h('div', { class: 'tcard-head', style: { background: GR[t.g].c } }, t.n),
+      const body = h('div', null, artBox(t), h('div', { class: 'tcard-head', style: { background: GR[t.g].c } }, t.n),
         h('p', null, `Hoje: ${rentLabel(pr.h)} · aluguel ${fmt(t.r[pr.h])}`),
         h('p', null, `Depois: ${rentLabel(pr.h + 1)} · aluguel `, h('b', { class: 'good-t' }, fmt(t.r[pr.h + 1]))),
         h('div', { class: 'small muted' }, `Custo ${fmt(t.hc)} · Seu dinheiro ${fmt(p.cash)}`));
-      const r = await Core.modal({ title: hotel ? '🏨 Construir hotel?' : '🏠 Construir casa?', body, dismiss: false, buttons: [{ text: 'Agora não', cls: 'ghost', value: false }, { text: `Construir ${fmt(t.hc)}`, cls: 'primary', value: true }] });
+      const btns = [{ text: 'Agora não', cls: 'ghost', value: false }];
+      if (pr.h <= 3 && canHotel(p, i)) { body.append(h('p', { class: 'small', style: { marginTop: '6px' } }, `🏨 Hotel direto: ${fmt(hotelCost(i))} — aluguel `, h('b', { class: 'good-t' }, fmt(t.r[5])))); btns.push({ text: `🏨 Hotel direto ${fmt(hotelCost(i))}`, cls: 'blue', value: 'hotel' }); }
+      btns.push({ text: `${hotel ? '🏨' : '🏠'} ${hotel ? 'Hotel' : 'Casa'} ${fmt(t.hc)}`, cls: 'primary', value: true });
+      const r = await Core.modal({ title: hotel ? '🏨 Construir hotel?' : '🏠 Construir?', body, dismiss: false, buttons: btns });
       if (!r) return;
-      doBuild(p, i); Core.snd('chip'); say(`${p.name} construiu ${hotel ? 'um hotel' : 'uma casa'} em ${t.n}.`); renderState(); await wait(350);
+      if (r === 'hotel') { doHotel(p, i); say(`${p.name} construiu um hotel em ${t.n}!`); } else { doBuild(p, i); say(`${p.name} construiu ${hotel ? 'um hotel' : 'uma casa'} em ${t.n}.`); }
+      Core.snd('chip'); renderState(); await wait(350);
     }
   }
 
@@ -582,7 +619,7 @@
     const node = h('div', { class: 'mng' });
     const render = () => {
       node.innerHTML = '';
-      node.append(h('div', { class: 'row sb', style: { marginBottom: '8px' } }, h('b', null, `Dinheiro: ${fmt(p.cash)}`), need ? h('b', { class: p.cash >= need ? 'good-t' : 'bad' }, `Precisa: ${fmt(need)}`) : h('span', { class: 'muted small' }, `Casas ${M.houses} · Hotéis ${M.hotels}`)));
+      node.append(h('div', { class: 'row sb', style: { marginBottom: '8px' } }, h('b', null, `Dinheiro: ${fmt(p.cash)}`), need ? h('b', { class: p.cash >= need ? 'good-t' : 'bad' }, `Precisa: ${fmt(need)}`) : h('span', { class: 'muted small' }, `Seus imóveis: 🏠${bldCount(p).h} 🏨${bldCount(p).H}`)));
       const list = owned(p);
       if (!list.length) node.append(h('p', { class: 'muted small' }, 'Você ainda não tem propriedades.'));
       const groups = {};
@@ -596,6 +633,7 @@
           node.append(h('div', { class: 'mg-row' },
             h('div', { class: 'grow' }, h('b', null, t.n), h('div', { class: 'small muted' }, (pr.mort ? '🔒 hipotecada' : t.t === 'prop' ? `${rentLabel(pr.h)} · aluguel ${fmt(t.r[pr.h])}${nextR}` : `${t.ic} aluguel ${COMP_MULT[nOwned(p.id, COMPS)]}× dados`))),
             t.t === 'prop' && !pr.mort && pr.h < 5 ? h('button', { class: 'btn sm' + (canBuild(p, t.i) ? '' : ' disabled'), onclick: () => { if (canBuild(p, t.i)) { doBuild(p, t.i); Core.snd('chip'); renderState(); render(); } } }, `${pr.h === 4 ? '🏨' : '🏠'} ${fmt(t.hc)}`) : null,
+            t.t === 'prop' && !pr.mort && pr.h < 4 ? h('button', { class: 'btn sm blue' + (canHotel(p, t.i) ? '' : ' disabled'), title: 'Paga as casas que faltam e já recebe o hotel', onclick: () => { if (canHotel(p, t.i)) { doHotel(p, t.i); Core.snd('chip'); renderState(); render(); } } }, `🏨 Hotel direto ${fmt(hotelCost(t.i))}`) : null,
             t.t === 'prop' && pr.h ? h('button', { class: 'btn sm' + (canSell(p, t.i) ? '' : ' disabled'), onclick: () => { if (canSell(p, t.i)) { doSell(p, t.i); renderState(); render(); } } }, `Vender +${fmt(t.hc / 2)}`) : null,
             pr.mort ? h('button', { class: 'btn sm good' + (canUnmortgage(p, t.i) ? '' : ' disabled'), onclick: () => { if (canUnmortgage(p, t.i)) { doUnmortgage(p, t.i); renderState(); render(); } } }, `Resgatar ${fmt(unmortCost(t))}`)
               : h('button', { class: 'btn sm' + (canMortgage(p, t.i) ? '' : ' disabled'), onclick: () => { if (canMortgage(p, t.i)) { doMortgage(p, t.i); renderState(); render(); } } }, `Hipotecar +${fmt(mortVal(t))}`)));
@@ -904,16 +942,17 @@
         if (!canBuild(p, t.i) || p.cash - t.hc < res) return;
         const pr = M.props[t.i];
         const roi = (t.r[pr.h + 1] - t.r[pr.h]) / t.hc * (.45 + hitProb(p.id, t.i) * 1.6);
-        const bonus = pr.h === 4 && M.houses < 8 ? 1.25 : 1;                        // hotel libera 4 casas no estoque
-        const sc = roi * bonus;
+        const sc = roi;
         if (!best || sc > best.sc) best = { i: t.i, sc };
       });
       if (!best) break;
-      doBuild(p, best.i); built++;
+      const pr = M.props[best.i], tt = T[best.i];
+      if (pr.h >= 1 && pr.h <= 3 && p.cash - hotelCost(best.i) >= res * 1.3 + 100 && p.ai.aggr > .45) { doHotel(p, best.i); built += 5 - pr.h; }
+      else { doBuild(p, best.i); built++; }
     }
     if (built) { say(`${p.name} construiu ${built} melhoria(s).`); Core.snd('chip'); renderState(); await wait(700); }
   }
 
   Core.register('metropole', { mount, unmount });
-  window.MetropoleDebug = { state: () => M, T, GT, worth, aiEval, aiCounter, aiFindDeal, rentOf, netWorth, COMP_MULT };
+  window.MetropoleDebug = { render: () => renderState(), state: () => M, T, GT, worth, aiEval, aiCounter, aiFindDeal, rentOf, netWorth, COMP_MULT };
 })();

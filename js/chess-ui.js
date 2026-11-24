@@ -55,6 +55,29 @@
     sync(game, opts) { const r = new E.Search(game.pos).run(opts); return r ? r.move : 0; }
   };
 
+  // ---------------- cliente do treinador (worker próprio, em paralelo à IA) ----------------
+  const Coach = {
+    worker: null, id: 0, pending: new Map(),
+    ensure() {
+      if (this.worker || this.failed) return;
+      try {
+        this.worker = new Worker('js/chess-worker.js');
+        this.worker.onmessage = ev => { const p = this.pending.get(ev.data.id); if (p) { this.pending.delete(ev.data.id); p(ev.data); } };
+        this.worker.onerror = () => { this.worker = null; this.failed = true; const ps = Array.from(this.pending.values()); this.pending.clear(); ps.forEach(f => f(null)); };
+      } catch (e) { this.failed = true; }
+    },
+    cancel() { if (this.worker) { this.worker.terminate(); this.worker = null; } this.pending.clear(); },
+    analyze(d) {
+      this.ensure();
+      const sync = () => { try { return window.ChessCoach.analyzeCore(E, Object.assign({}, d, { depth: Math.min(d.depth, 4), time: 500 })); } catch (e) { return null; } };
+      if (this.worker) {
+        const id = ++this.id;
+        return new Promise(res => { this.pending.set(id, m => res(m ? m.res : sync())); this.worker.postMessage(Object.assign({ kind: 'analyze', id }, d)); });
+      }
+      return new Promise(res => setTimeout(() => res(sync()), 30));
+    }
+  };
+
   // ---------------- tabuleiro ----------------
   class BoardView {
     constructor(cb) {
@@ -218,7 +241,7 @@
       sel: null, targets: new Map(), over: false, thinking: false, token: 0, last: null, hint: null,
       style: Object.assign({ theme: 'walnut', pieces: 'classic', coords: true, legal: true, anim: true }, saved.style),
       tut: { op: null, step: 0, practice: false, side: 'w', fails: 0, correct: 0, tries: 0, auto: false, done: false },
-      started: false
+      started: false, coach: false, coachLog: [], coachGen: 0
     };
     S.board = new BoardView({ onDown: onDown, onTap: onTap, onDrop: onDrop });
     S.board.setStyle(S.style.theme, S.style.pieces, S.style.coords);
@@ -228,7 +251,7 @@
     S.holder = h('div', { class: 'board-holder' }, S.board.el);
     S.panel = h('div', { class: 'cside-body' });
     S.tabs = h('div', { class: 'seg full' },
-      [['play', '♟ Jogar'], ['tutorial', '🎓 Tutorial'], ['style', '🎨 Estilos'], ['online', '🌐 Online']].map(([k, t]) =>
+      [['play', '♟ Jogar'], ['coach', '🧑‍🏫 Treinador'], ['tutorial', '🎓 Aberturas'], ['style', '🎨 Estilos'], ['online', '🌐 Online']].map(([k, t]) =>
         h('button', { dataset: { k }, class: k === 'play' ? 'active' : '', onclick: () => setMode(k) }, t)));
 
     root.append(
@@ -246,7 +269,7 @@
 
   function unmount() {
     if (S) {
-      S.token++; AI.cancel(); clearInterval(S.autoTimer); clearInterval(S.clockIv);
+      S.token++; AI.cancel(); Coach.cancel(); clearInterval(S.autoTimer); clearInterval(S.clockIv);
       if (S.unSocial) S.unSocial();
       if (S.online) cleanupOnline();
     }
@@ -257,10 +280,13 @@
   function setMode(k) {
     // "Estilos" é só um painel: não muda o modo de jogo (o jogo continua jogável)
     if (k === 'style') { S.tab = 'style'; syncTabs(); renderPanel(); return; }
-    if (S.mode === k) { if (S.tab !== k) { S.tab = k; syncTabs(); renderPanel(); } return; }
+    const coach = k === 'coach'; if (coach) k = 'play';              // o Treinador é o modo "jogar" com análise ligada
     if (S.online && k !== 'online') { Core.toast('Saia da partida online primeiro (botão Sair).'); return; }
+    S.coach = coach;
+    const tab = coach ? 'coach' : k;
+    if (S.mode === k) { if (S.tab !== tab) { S.tab = tab; syncTabs(); renderPanel(); } return; }
     S.token++; AI.cancel(); S.thinking = false; clearInterval(S.autoTimer); S.tut.auto = false;
-    S.mode = k; S.tab = k;
+    S.mode = k; S.tab = tab;
     syncTabs();
     S.root.classList.toggle('mode-tut', k === 'tutorial');
     if (k === 'play') { restorePlayBoard(); }
@@ -357,6 +383,7 @@
     if (fromGame) { S.game = fromGame; S.humanColor = fromGame.humanColor; }
     else S.game = new E.Game();
     S.over = false; S.sel = null; S.targets = new Map(); S.last = null; S.hint = null;
+    S.coachLog = []; S.coachGen++; Coach.cancel();
     S.clock = makeClock(parseTc(S.tc));
     const hl = S.game.history[S.game.history.length - 1];
     if (hl) S.last = [hl.from, hl.to];
@@ -430,9 +457,88 @@
   }
   function humanPlay(m) {
     if (S.online) { sendMove(m); return; }
+    const pre = S.coach ? { fen: S.game.startFen, moves: S.game.history.map(x => x.m), played: m, gen: S.coachGen } : null;
     if (!S.game.play(m)) return;
     S.hint = null; S.sel = null; S.targets = new Map(); S.board.setArrows([]);
     afterMove();
+    if (pre) coachRequest(pre);
+  }
+  // ---------- treinador: análise passo a passo dos SEUS lances ----------
+  async function coachRequest(pre) {
+    const hl = S.game.history[S.game.history.length - 1];
+    const entry = { pending: true, san: hl.san, n: Math.ceil(S.game.history.length / 2) };
+    S.coachLog.push(entry); renderCoach();
+    const d = { fen: pre.fen, moves: pre.moves, played: pre.played, depth: 6, time: 1100 };
+    const book = bookName(pre);
+    const res = await Coach.analyze(d);
+    if (!S || pre.gen !== S.coachGen) return;
+    let rv = null;
+    try { rv = res ? window.ChessCoach.review(E, Object.assign({}, d, { book }), res) : null; } catch (e) { console.error(e); }
+    Object.assign(entry, rv || { failed: true, lines: ['Não consegui analisar este lance.'], title: 'Sem análise', icon: '🤔', cls: 'good', eval: '', acc: 0, loss: 0 });
+    entry.pending = false; entry.open = true;
+    S.coachLog.forEach(x => { if (x !== entry) x.open = false; });
+    renderCoach();
+  }
+  /** nome da abertura se o lance jogado é de livro (segue alguma linha do tutorial de aberturas) */
+  function bookName(pre) {
+    try {
+      const g = new E.Game(pre.fen); for (const m of pre.moves) g.play(m);
+      const hs = g.history.map(x => x.san.replace(/[+#]/g, '')), played = g.san(pre.played).replace(/[+#]/g, '');
+      if (hs.length > 16) return '';
+      for (const o of OP.list) {
+        if (o.cat === 'trap') continue;
+        const ms = o.moves.map(m => m[0].replace(/[+#]/g, ''));
+        if (ms.length <= hs.length || ms[hs.length] !== played) continue;
+        if (hs.every((s, i) => ms[i] === s)) return hs.length < 4 ? 'um começo clássico, usado em várias aberturas' : o.name;
+      }
+    } catch (e) { /* sem livro */ }
+    return '';
+  }
+  function renderCoach() {
+    const box = S && S.coachEl; if (!box || !box.isConnected) return;
+    box.innerHTML = '';
+    const log = S.coachLog;
+    if (!log.length) { box.append(h('div', { class: 'small muted', style: { lineHeight: 1.5 } }, 'Jogue normalmente. Depois de cada lance seu, o treinador compara com o melhor lance do motor e explica o que foi bom, o que foi ruim e o que seria melhor.')); return; }
+    const last = log[log.length - 1];
+    const card = h('div', { class: 'coach-card g-' + (last.cls || 'pending') });
+    if (last.pending) card.append(h('div', { class: 'cc-head' }, h('span', { class: 'cc-badge' }, '⏳ Analisando ' + last.san + '…')));
+    else {
+      const ev = Math.max(-600, Math.min(600, last.evalNum || 0));
+      card.append(
+        h('div', { class: 'cc-head' }, h('span', { class: 'cc-badge' }, `${last.icon} ${last.title}`), h('span', { class: 'cc-eval' }, last.eval)),
+        h('div', { class: 'cc-bar' }, h('i', { style: { width: (50 + ev / 12) + '%' } })),
+        h('div', { class: 'cc-move small muted' }, `Seu lance: `, h('b', null, last.san), last.bestSan && last.bestSan !== last.san ? [' · Melhor: ', h('b', null, last.bestSan)] : null, ` · precisão ${last.acc}%`),
+        h('ul', { class: 'cc-why' }, (last.lines || []).map(t => h('li', null, t))),
+        last.best && last.best !== last.played ? h('div', { class: 'row', style: { gap: '8px' } },
+          h('button', { class: 'btn sm grow', onclick: () => { const m = last.best; S.hint = [m & 127, (m >> 7) & 127]; S.board.setArrows([{ from: S.hint[0], to: S.hint[1], color: '#2fbf6c' }]); refreshMarks(); } }, '👁 Ver o melhor lance'),
+          h('button', { class: 'btn sm grow primary', onclick: coachRetry }, '↶ Tentar de novo')) : null);
+    }
+    box.append(card);
+    const done = log.filter(x => !x.pending && x.grade);
+    if (done.length) {
+      const sm = window.ChessCoach.summary(done);
+      box.append(h('div', { class: 'cc-sum small' }, `Precisão média: `, h('b', null, sm.acc + '%'), ` · ⭐${sm.counts.best} ✅${sm.counts.excellent} 👍${sm.counts.good} ⚠️${sm.counts.inaccuracy} ❌${sm.counts.mistake} 💥${sm.counts.blunder}`));
+      const list = h('div', { class: 'cc-list' });
+      log.slice(0, -1).slice().reverse().forEach(x => {
+        if (x.pending) return;
+        const row = h('div', { class: 'cc-row g-' + x.cls, onclick: () => { x.open = !x.open; renderCoach(); } },
+          h('div', { class: 'cc-rh' }, h('span', null, `${x.n}. ${x.san}`), h('span', null, `${x.icon} ${x.title}`)),
+          x.open ? h('ul', { class: 'cc-why' }, (x.lines || []).map(t => h('li', null, t))) : null);
+        list.append(row);
+      });
+      box.append(list);
+    }
+  }
+  function coachSummaryText() {
+    const done = S.coachLog.filter(x => !x.pending && x.grade);
+    if (!done.length) return '';
+    const sm = window.ChessCoach.summary(done);
+    return `Treinador: precisão média ${sm.acc}% em ${sm.n} lances — ${sm.counts.best + sm.counts.excellent} ótimos, ${sm.counts.good} bons, ${sm.counts.inaccuracy} imprecisões, ${sm.counts.mistake + sm.counts.blunder} erros.`;
+  }
+  function coachRetry() {
+    if (S.mode !== 'play' || S.online) return;
+    if (S.clock) { Core.toast('Tentar de novo não está disponível em partidas com relógio'); return; }
+    undo();
   }
   function afterMove() {
     const g = S.game, hl = g.history[g.history.length - 1];
@@ -491,7 +597,8 @@
     Core.snd(snd);
     const online = !!S.online;
     if (online) { S.online.live = false; updateOnlineStatus(); }
-    Core.modal({ title, body: msg, buttons: [{ text: 'Rever partida', cls: 'ghost', value: 'r' }, online ? { text: 'Voltar ao lobby', cls: 'primary', value: 'l' } : { text: 'Nova partida', cls: 'primary', value: 'n' }] })
+    if (S.coach) { const t = coachSummaryText(); if (t) msg = msg + '\n\n' + t; }
+    Core.modal({ title, body: h('div', { style: { whiteSpace: 'pre-line' } }, msg), buttons: [{ text: 'Rever partida', cls: 'ghost', value: 'r' }, online ? { text: 'Voltar ao lobby', cls: 'primary', value: 'l' } : { text: 'Nova partida', cls: 'primary', value: 'n' }] })
       .then(v => { if (!S) return; if (v === 'n') newGame(); else if (v === 'l') leaveOnline(false); });
   }
 
@@ -523,7 +630,7 @@
           h('div', { class: 'nm' }, isYou ? (o && so && so.me ? so.me.name : Core.settings.name) : (o ? o.oppName : `IA · ${lv.name}`), (!isYou && S.thinking && !o) ? h('span', { class: 'dots' }, ' pensando') : null),
           h('div', { class: 'cap', html: capturedHtml(color) + (diff > 0 ? `<b class="adv">+${diff}</b>` : '') })),
         h('div', { class: 'sub' }, isYou ? (color ? 'Pretas' : 'Brancas') : (o ? (o.oppOnline ? '🟢 online' : '⚪ offline') : `~${lv.elo} Elo`)),
-        S.clock ? (S.clkEls[color] = h('div', { class: 'clk' }, fmtClock(S.clock.t[color]))) : null);
+        ...(S.clock ? [S.clkEls[color] = h('div', { class: 'clk' }, fmtClock(S.clock.t[color]))] : []));
       bar.classList.toggle('turn', S.game.pos.turn === color && !S.over);
     };
     fill(S.topBar, topColor); fill(S.botBar, bottomColor);
@@ -571,6 +678,7 @@
     const colorSeg = h('div', { class: 'seg full' }, [['w', '⚪ Brancas'], ['r', '🎲 Sorteio'], ['b', '⚫ Pretas']].map(([k, t]) =>
       h('button', { class: S.colorPref === k ? 'active' : '', onclick: e => { S.colorPref = k; saveChess(); Core.$$('button', colorSeg).forEach(b => b.classList.remove('active')); e.currentTarget.classList.add('active'); } }, t)));
     S.movesEl = h('div', { class: 'moves' });
+    if (S.coach) { S.coachEl = h('div', { class: 'coach' }); S.panel.append(h('div', { class: 'panel' }, h('h3', null, '🧑‍🏫 Treinador'), S.coachEl)); renderCoach(); }
     S.panel.append(
       h('div', { class: 'panel' }, h('h3', null, '⏱ Tempo de jogo'), tcPicker(), h('div', { class: 'small muted', style: { marginTop: '8px' } }, 'Vale a partir da próxima partida. Formato "5 | 3" = 5 minutos + 3 segundos por lance.')),
       h('div', { class: 'panel' }, h('h3', null, 'Partida'),
@@ -593,8 +701,13 @@
     if (S.clock) { Core.toast('Desfazer não está disponível em partidas com relógio'); return; }
     S.token++; AI.cancel(); S.thinking = false;
     S.over = false;
+    const h0 = S.game.history.slice();
     S.game.undo();
     if (S.game.history.length && S.game.pos.turn !== S.humanColor) S.game.undo();
+    if (S.coach) {                                                  // tira do treinador os lances (seus) que foram desfeitos
+      const gone = h0.slice(S.game.history.length).filter(x => x.color === S.humanColor).length;
+      S.coachLog.length = Math.max(0, S.coachLog.length - gone); S.coachGen++; renderCoach();
+    }
     const hl = S.game.history[S.game.history.length - 1];
     S.last = hl ? [hl.from, hl.to] : null; S.hint = null; S.sel = null; S.targets = new Map();
     S.board.setArrows([]); S.board.setPosition(S.game.pos.b, null, false);
@@ -1082,6 +1195,7 @@
     refreshMarks(); updateBars(); updateStatus(); renderPanel();
   }
 
+  window.ChessDebug = { state: () => S, play: m => humanPlay(m), setMode: k => setMode(k) };
   Core.register('chess', { mount, unmount, joinRoom: inv => { if (S) { if (S.mode !== 'online') setMode('online'); joinRoom(inv); } } });
 
 })();

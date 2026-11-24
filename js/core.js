@@ -5,6 +5,7 @@
   'use strict';
   const Core = {};
   window.Core = Core;
+  Core.VERSION = '2.0 · 24/11/2026';
 
   Core.$ = (s, r) => (r || document).querySelector(s);
   Core.$$ = (s, r) => Array.from((r || document).querySelectorAll(s));
