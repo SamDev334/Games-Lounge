@@ -53,3 +53,5 @@
 .ds-pend { border: 1px dashed var(--gold); border-radius: 12px; padding: 10px; background: rgba(233, 196, 106, .06); }
 .ds-pend .who { font-size: 12px; color: var(--muted); }
 .ds-sol { padding: 14px; border-radius: 14px; background: rgba(34, 197, 94, .08); border: 1px solid rgba(34, 197, 94, .4); line-height: 1.55; }
+
+.ds-sg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-weight: 400; } .ds-sg .btn { font-size: 12px; padding: 5px 9px; }

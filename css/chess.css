@@ -194,3 +194,17 @@
 .tc-item b { font-size: 15px; } .tc-item span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 .tc-item.active { border-color: var(--gold); background: rgba(233, 196, 106, .14); }
 @media (max-width: 480px) { .clk { font-size: 18px; min-width: 70px; padding: 3px 8px; } .cbar .sub { display: none; } }
+
+/* ===== Treinador ===== */
+.coach { display: flex; flex-direction: column; gap: 8px; }
+.coach-card { border-radius: 12px; padding: 10px 12px; background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-left-width: 5px; }
+.coach-card.g-best, .cc-row.g-best { border-left-color: #22c55e; } .coach-card.g-excellent, .cc-row.g-excellent { border-left-color: #4ade80; } .coach-card.g-good, .cc-row.g-good { border-left-color: #a3e635; }
+.coach-card.g-inaccuracy, .cc-row.g-inaccuracy { border-left-color: #fbbf24; } .coach-card.g-mistake, .cc-row.g-mistake { border-left-color: #fb923c; } .coach-card.g-blunder, .cc-row.g-blunder { border-left-color: #ef4444; }
+.cc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.cc-badge { font-weight: 700; font-size: 15px; } .cc-eval { font-family: var(--font-title); font-size: 15px; color: var(--gold); }
+.cc-bar { height: 6px; border-radius: 6px; background: #2a2a33; overflow: hidden; margin-bottom: 6px; } .cc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #f1f5f9, #cbd5e1); transition: width .4s; }
+.cc-why { margin: 6px 0 8px 16px; padding: 0; font-size: 13.5px; line-height: 1.45; } .cc-why li { margin-bottom: 4px; }
+.cc-sum { margin-top: 2px; color: var(--muted); }
+.cc-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.cc-row { border-radius: 8px; padding: 6px 10px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-left-width: 4px; font-size: 13px; cursor: pointer; }
+.cc-rh { display: flex; justify-content: space-between; gap: 8px; }
